@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BKK Delay Radar</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+ :root{--ink:#24222b;--muted:#6b6670;--line:#ddd8d0;--bg:#f8f5ef;--card:#fff;--accent:#6b2fa0;--warm:#c98a1b;--soft:#efe6f7}
+ *{box-sizing:border-box}
+ body{font-family:-apple-system,Segoe UI,Calibri,Arial,sans-serif;margin:0;background:var(--bg);color:var(--ink);line-height:1.45}
+ header{background:#2e1a47;color:#fff;padding:20px 28px}
+ header h1{margin:0;font-size:24px;font-weight:600}
+ header .sub{opacity:.8;font-size:14px;margin-top:4px}
+ .bar{background:#fff;border-bottom:1px solid var(--line);padding:14px 28px;display:flex;flex-wrap:wrap;gap:28px}
+ .stat .n{font-size:22px;font-weight:600}
+ .stat .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+ .warn{margin:16px 28px 0;padding:10px 14px;border-left:4px solid var(--warm);background:#fff7e8;font-size:13px;max-width:1544px}
+ h3.group{margin:26px 28px 0;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+ main{padding:12px 28px 0;display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));max-width:1600px}
+ section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;overflow-x:auto}
+ section.wide{grid-column:1/-1}
+ h2{margin:0 0 4px;font-size:16px;font-weight:600}
+ .hint{color:var(--muted);font-size:12px;margin:0 0 12px}
+ table{border-collapse:collapse;width:100%;font-size:14px}
+ th,td{padding:7px 8px;border-bottom:1px solid #eee;text-align:left}
+ th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+ .bar-cell{position:relative}
+ .bar-cell i{position:absolute;left:0;top:3px;bottom:3px;background:var(--soft);border-radius:3px;z-index:0}
+ .bar-cell span{position:relative;z-index:1}
+ .tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:8px;background:#fff1d6;color:#8a5a00;margin-left:6px}
+ footer{padding:22px 28px;color:var(--muted);font-size:12px}
+ .err{color:#b5473a}
+ section > canvas{max-height:260px}   /* charts only: the map draws on its own canvas */
+ #map{height:560px;border-radius:8px;background:#eee}
+ #map .leaflet-tile-pane{filter:grayscale(1) brightness(1.08) contrast(.85)}
+ .legend{background:#fff;padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+ .legend i{display:inline-block;width:18px;height:4px;margin-right:6px;vertical-align:middle;border-radius:2px}
+ .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+ .controls select{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;min-width:120px}
+ .controls button{font:inherit;font-size:13px;padding:5px 12px;border-radius:14px;border:1px solid var(--line);background:#fff;cursor:pointer}
+ .controls button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+ .views{margin-top:12px;display:flex;gap:8px}
+ .dgrid{display:grid;grid-template-columns:minmax(300px,5fr) 7fr;gap:18px;align-items:start}
+ @media (max-width:900px){.dgrid{grid-template-columns:1fr}}
+ #dmap{height:440px;border-radius:8px;background:#eee}
+ #dmap .leaflet-tile-pane{filter:grayscale(1) brightness(1.1) contrast(.8)}
+ .weights{font-size:12px;color:var(--muted);margin-top:8px}
+ .tt-btn{font:inherit;font-size:12px;padding:5px 10px;border-radius:14px;border:1px solid #bbb;background:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+ .tt-btn[aria-pressed="true"]{background:#2e1a47;color:#fff;border-color:#2e1a47}
+ .ok{color:#2e7d32;font-weight:600} .bad{color:#b71c1c;font-weight:600}
+ .group-intro{margin:4px 28px 0;font-size:14px;color:var(--muted);max-width:1544px}
+ details.guide{margin:16px 28px 0;background:#fff;border:1px solid var(--line);border-radius:10px;max-width:1544px}
+ details.guide summary{cursor:pointer;padding:12px 18px;font-weight:600;font-size:15px;color:#2e1a47}
+ details.guide .g{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:8px 32px;padding:4px 18px 16px}
+ details.guide h4{margin:10px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+ details.guide dl{margin:0;font-size:13px}
+ details.guide dt{font-weight:600;margin-top:8px}
+ details.guide dd{margin:2px 0 0;color:#3d3944}
+ .sample-bar{display:inline-block;width:70px;height:14px;background:var(--soft);border-radius:3px;vertical-align:middle;margin-right:6px}
+ .sample-grey{color:#a9a4ad;font-weight:600}
+ .swatch{display:inline-block;width:22px;height:5px;border-radius:2px;vertical-align:middle;margin-right:6px}
+ .views button{font:inherit;font-size:13px;padding:6px 14px;border-radius:16px;border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;cursor:pointer}
+ .views button[aria-pressed="true"]{background:#fff;color:#2e1a47;border-color:#fff;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>BKK Delay Radar</h1>
+  <div class="sub" id="sub">Loading…</div>
+  <div class="views" role="group" aria-label="Time window">
+    <button type="button" data-view="week" aria-pressed="true">Last 7 days</button>
+    <button type="button" data-view="all" aria-pressed="false">Whole period</button>
+  </div>
+</header>
+<div class="bar" id="stats"></div>
+<div class="warn" id="coverageWarn" hidden></div>
+<details class="guide">
+<summary>How to read this page: terms, signs and colours</summary>
+<div class="g">
+<div><h4>Terms</h4><dl>
+<dt>Delay</dt><dd>How many minutes after the timetable a vehicle arrives at a stop (a minus sign means early), from BKK's last real-time prediction before the arrival.</dd>
+<dt>On time</dt><dd>From 1 minute early to 3 minutes late.</dd>
+<dt>Delay added</dt><dd>How much the delay grew between the previous stop and this one. It shows where time is lost.</dd>
+<dt>Stretch</dt><dd>The part of a route between two neighbouring stops.</dd>
+<dt>Rush hour</dt><dd>Workdays 7–9 and 16–18, Budapest time.</dd>
+<dt>Arrivals</dt><dd>How many stop arrivals a number is based on. More arrivals, more certain.</dd>
+</dl></div>
+<div><h4>More terms</h4><dl>
+<dt>Typical delay</dt><dd>The median: half of the arrivals are better than this, half are worse.</dd>
+<dt>Bad-day delay</dt><dd>The 95th percentile: only 1 arrival in 20 is later than this.</dd>
+<dt>Extra time to plan</dt><dd>Bad-day delay minus typical delay: how much earlier you must leave to be on time 19 times out of 20.</dd>
+<dt>Bunching</dt><dd>Two vehicles of the same line arriving close together, then a long gap.</dd>
+<dt>City centre, middle ring, outskirts</dt><dd>Under 3 km, 3–8 km and over 8 km from Deák Ferenc tér.</dd>
+<dt>Left out as errors</dt><dd>Stale predictions, trips moved to the wrong timetable slot and recurring data errors. They are not used in any figure; see 6 · About the data.</dd>
+</dl></div>
+<div><h4>Signs and colours</h4><dl>
+<dt><span class="sample-bar"></span>Shaded bar behind a number</dt><dd>How big the value is compared with the other rows of the same table.</dd>
+<dt><span class="tag">few data</span></dt><dd>Fewer than 1,000 arrivals: the number may still change a lot.</dd>
+<dt><span class="sample-grey">12.3</span> Grey number</dt><dd>Based on only a few arrivals: read it with care.</dd>
+<dt>–</dt><dd>No data for that cell.</dd>
+<dt><span class="swatch" style="background:#6b2fa0"></span>Purple and <span class="swatch" style="background:#c98a1b"></span>amber lines in charts</dt><dd>Workdays and weekends or holidays.</dd>
+<dt>Map colours</dt><dd><span class="swatch" style="background:#2e7d32"></span>makes up time <span class="swatch" style="background:#9ccc65"></span>0–15 s <span class="swatch" style="background:#fbc02d"></span>15–40 s <span class="swatch" style="background:#ef6c00"></span>40–90 s <span class="swatch" style="background:#b71c1c"></span>over 90 s added</dd>
+<dt>KPI</dt><dd>A measurable target for the project itself (data coverage, quality, speed, cost), not for BKK. See 6 · About the data.</dd>
+<dt>Reliability index (1–10)</dt><dd>Five measures per district, each scaled between the worst (1) and the best district (10), then weighted. It compares districts with each other, not with a fixed standard.</dd>
+<dt>Live road traffic (TomTom)</dt><dd>A switch on the delay map. It shows car traffic right now, straight from TomTom; we do not store it.</dd>
+<dt>Associations, not causes</dt><dd>When two things go together (for example traffic lights and delay), the table does not prove that one causes the other.</dd>
+</dl></div>
+</div>
+</details>
+
+<h3 class="group">1 · How late are vehicles?</h3>
+<p class="group-intro">The big picture: which lines are late, how reliable they are, and when in the day and week delays happen.</p>
+<main>
+  <section><h2>Which lines are the most late?</h2><p class="hint" id="h-hot"></p><table id="hotspots"></table></section>
+  <section><h2>Late from the start, or late on the way?</h2><p class="hint">For the most delayed lines: how late trips are at the second stop (the start), how much delay they add along the route, and how late they are at the last stop.</p><table id="sources"></table></section>
+  <section class="wide"><h2>Incidents: hours with very large delays</h2><p class="hint">Each row is one line in one hour when the typical delay was 10 minutes or more: usually an accident, a closure or a crowd. “BKK notice” is the disruption BKK announced at the time (recorded from 2 November).</p><table id="unusual"></table></section>
+  <section><h2>How punctual is each vehicle type?</h2><p class="hint">On time = from 1 minute early to 3 minutes late. The metro is not in BKK's real-time data, so it is missing.</p><table id="punctuality"></table></section>
+  <section id="trendWrap"><h2>Average delay, day by day</h2><p class="hint">One point per day. Days with few hours of data (see 6 · About the data) are less certain.</p><canvas id="trendChart"></canvas></section>
+  <section id="hourWrap"><h2>Average delay through the day</h2><p class="hint">By hour of arrival, Budapest time; workdays (purple) and weekends or holidays (amber). Gaps are hours without data.</p><canvas id="hourChart"></canvas></section>
+  <section><h2>Which lines are hardest to plan with?</h2><p class="hint">“Extra time to plan” = bad-day delay minus typical delay: how much earlier you must leave to be on time 19 times out of 20. Lines with over 1,000 arrivals.</p><table id="reliability"></table></section>
+  <section><h2>Which lines often run too early?</h2><p class="hint">Arrivals more than 1 minute before the timetable. An early bus can be worse than a late one: passengers miss it. Last stops are left out.</p><table id="early"></table></section>
+  <section><h2>Rush hour against the rest of the week</h2><p class="hint">Rush hour = workdays 7–9 and 16–18.</p><table id="peak"></table></section>
+  <section><h2>Delay by vehicle type</h2><p class="hint">Average and bad-day delay for each vehicle type.</p><table id="byType"></table></section>
+</main>
+
+<h3 class="group">2 · Where is time lost?</h3>
+<p class="group-intro">Places on the network where delay is added: districts, stretches between stops, stops, zones and rush-hour congestion.</p>
+<main>
+  <section class="wide" id="districtWrap"><h2>Which districts have the most reliable public transport?</h2><p class="hint">A reliability index for each of Budapest's 23 districts, from all arrivals at the district's stops. Five measures are each scaled from 1 (the worst district) to 10 (the best), then weighted and added up, so 10 means best in Budapest. The measures are shown too, because the weights are our choice. District boundaries: © OpenStreetMap contributors.</p>
+  <div class="dgrid"><div><div id="dmap"></div><p class="hint" id="dmapInfo"></p></div><div style="overflow-x:auto"><table id="districts"></table><p class="weights" id="dweights"></p></div></div></section>
+</main>
+<main>
+  <section><h2>Which lines already start late?</h2><p class="hint">Delay at the second stop of each trip (the first stop always shows the timetable until the vehicle leaves). A late start points to the terminal or the previous trip, not to traffic.</p><table id="lateStarts"></table></section>
+  <section><h2>Where along the route is the most time lost?</h2><p class="hint">Each row is the stretch between two stops of one line, with the average delay added on it. The first and last stretch of a trip are left out; at least 100 arrivals.</p><table id="segments"></table></section>
+  <section><h2>Where are buses slowest?</h2><p class="hint">Measured speed of buses and trolleybuses between two stops, from BKK vehicle positions. Night lines (9xx) and the first and last stretch of a trip are left out, because vehicles wait there by timetable.</p><table id="slowest"></table></section>
+  <section class="wide"><h2>Where does rush hour slow buses down most?</h2><p class="hint">Bus and trolleybus speed in workday rush hour against the same stretch at night, when the roads are empty. Top: the network average; below: the worst stretches. Day lines only; at least 10 speed readings in both.</p><table id="congestionTotal"></table><table id="congestion"></table></section>
+  <section><h2>City centre against the outskirts</h2><p class="hint">City centre = under 3 km from Deák Ferenc tér, middle ring = 3–8 km, outskirts = over 8 km.</p><table id="zones"></table></section>
+  <section><h2>Stops with the largest average delay</h2><p class="hint">Each row is one line at one stop. A stop high on this list is often late because of what happened before it, not at it.</p><table id="worstStops"></table></section>
+</main>
+
+<h3 class="group">3 · What goes with more delay?</h3>
+<p class="group-intro">Street features, weather, disruptions and operations compared. These are associations, not proof of cause.</p>
+<main>
+  <section class="wide"><h2>Does the street matter?</h2><p class="hint">Bus and trolleybus. Delay added before the stop, by street feature. The zone columns compare like with like, because busy streets have bus lanes, lights and malls all at once. Grey = under 300 arrivals. Associations, not proof of cause.</p><table id="infrastructure"></table></section>
+  <section><h2>Do big transfer hubs slow buses down?</h2><p class="hint">Delay added on the stretch after a stop, by how many lines serve the stop and whether it has a metro or HÉV connection. More passengers getting on and off take more time.</p><table id="busyStops"></table></section>
+  <section><h2>Do many stops slow a line down?</h2><p class="hint">Lines grouped by how many stops they have per kilometre, with the delay added per kilometre. Bus and trolleybus.</p><table id="stopDensity"></table></section>
+  <section><h2>Delay during BKK disruption notices</h2><p class="hint">Grouped by the BKK notice active on the line at the time: works, traffic, detour, no service and so on. “none” = no notice.</p><table id="disruptions"></table></section>
+  <section><h2>Delay by weather</h2><p class="hint" id="h-weather"></p><table id="weather"></table></section>
+  <section><h2>How much does rain really add?</h2><p class="hint">Rainy hours against dry hours of the same vehicle type, day type and hour, so a rainy Monday morning is compared with a dry Monday morning, not with a quiet Sunday.</p><table id="rainType"></table></section>
+  <section><h2>Delay by temperature</h2><p class="hint">Air temperature in that hour. Most useful in winter, when frosty mornings appear.</p><table id="temperature"></table></section>
+  <section><h2>Daylight and darkness</h2><p class="hint">Delay added between stops in daylight and in the dark, bus and trolleybus. It mostly reflects the time of day (less traffic at night), not darkness itself.</p><table id="light"></table></section>
+  <section><h2>Does a late trip make the next one late?</h2><p class="hint">How late a trip starts, by how late the same vehicle finished its previous trip.</p><table id="carry"></table></section>
+  <section class="wide"><h2>Does a longer break at the terminal help?</h2><p class="hint">Rows: the planned break between the vehicle's previous trip and this one. Columns: how late the previous trip ended. Each cell shows how late this trip starts, in minutes: a long break should absorb a late arrival. Grey = under 50 trips.</p><table id="turnaround"></table></section>
+  <section><h2>Which lines run in bunches?</h2><p class="hint">Share of arrivals that came less than half the planned gap after the previous vehicle of the same line: two buses together, then a long wait.</p><table id="bunching"></table></section>
+</main>
+
+<h3 class="group">4 · Comparisons over time</h3>
+<p class="group-intro">Weekdays, this week against last week, the school break and special days against normal days.</p>
+<main>
+  <section><h2>Which weekday is worst?</h2><p class="hint">Normal days only (holidays and special days are left out). “Days” = how many of that weekday are in the data; fewer days, less certain.</p><table id="weekdays"></table></section>
+  <section><h2>This week against last week</h2><p class="hint">The whole network: the last 7 days against the 7 days before.</p><table id="wowTotal"></table></section>
+  <section><h2>Lines that got better or worse</h2><p class="hint">Average delay this week against last week, lines with at least 500 arrivals in both weeks. Plus = worse, minus = better.</p><table id="wow"></table></section>
+  <section><h2>School break against school days</h2><p class="hint">Normal workdays during and outside the school break (the autumn break ended on 1 November, the winter break starts on 19 December).</p><table id="school"></table></section>
+  <section><h2>Special days against normal days</h2><p class="hint">Days marked in our calendar, such as All Saints' Day, against normal days of the same type.</p><table id="special"></table></section>
+  <section class="wide"><h2>Cemetery lines around All Saints' Day</h2><p class="hint">Lines stopping at a cemetery. 1 November (a holiday) is compared with other holidays, 2 November (a workday) with other workdays; “Extra” is the difference.</p><table id="cemetery"></table></section>
+</main>
+
+<h3 class="group">5 · Explore</h3>
+<p class="group-intro">Pick a line and follow it stop by stop, or look at the map.</p>
+<main>
+  <section class="wide" id="lineWrap"><h2>Follow one line, stop by stop</h2><p class="hint">Pick a line and a direction: the average delay at each stop and the delay added since the previous stop, for the line's most common route. The first stop has no value, because it always shows the timetable.</p>
+    <div class="controls"><select id="lineSelect" aria-label="Line"><option>Loading…</option></select><span id="dirButtons"></span><span class="hint" id="lineInfo" style="margin:0"></span></div>
+    <canvas id="lineChart"></canvas><table id="lineTable"></table></section>
+  <section class="wide" id="mapWrap"><h2>Map: where delay is added</h2><p class="hint">Each coloured stretch connects two stops; its colour is the average delay added on it (see the legend). Hover over a stretch for details. At least 100 arrivals. If it is switched on, “Live road traffic (TomTom)” lays today's car traffic over the map, straight from TomTom and not stored. Map: © OpenStreetMap contributors.</p><div id="map"></div><p class="hint" id="mapInfo"></p></section>
+</main>
+
+<h3 class="group">6 · About the data</h3>
+<p class="group-intro">Our project KPIs, how much data was collected, how healthy the processing is, and what was left out as errors.</p>
+<main>
+  <section class="wide" id="kpiWrap"><h2>Are we meeting our KPIs?</h2><p class="hint">Eight project KPIs, measured by the pipeline itself. “Latest” is the most recent processed day and sets the status; “On target” counts every day of this view, so an earlier bad day stays visible. Processing time comes from the Glue job's run history, the cost from the measured run time and the data Athena reads (list prices).</p><table id="kpiTable"></table></section>
+</main>
+<main>
+  <section class="wide"><h2>Is the data processing healthy?</h2><p class="hint">One row per day from the processing job. Healthy: “Not matched” near 0 %, “Left out as errors” a few percent, no warnings. “Not tracked live” = trips with exactly 0 delay at every stop.</p><table id="pipeline"></table></section>
+  <section class="wide"><h2>Trips left out as data errors</h2><p class="hint">Trips 30+ minutes late at every stop on two or more days. A real incident happens once; these come back day after day, so they are vehicles matched to the wrong trip. They are not used anywhere on this page.</p><table id="suspects"></table></section>
+  <section class="wide"><h2>How much data was collected each day?</h2><p class="hint">One row per day. The student lab sleeps after four hours unless it is restarted, so some hours can be missing.</p><table id="coverage"></table></section>
+</main>
+<footer><div id="note"></div><div id="attr"></div><div id="failed" class="err"></div></footer>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const fmt = n => (n === null || n === undefined || n === '') ? '–' : n;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+function table(id, rows, cols, barCol, empty) {
+  const el = document.getElementById(id);
+  if (!rows || !rows.length) { el.innerHTML = `<tr><td>${empty || 'No data yet.'}</td></tr>`; return; }
+  const max = barCol ? Math.max(...rows.map(r => Math.abs(+r[barCol] || 0))) : 0;
+  const head = '<tr>' + cols.map(c => `<th class="${c.num ? 'n' : ''}">${c.label}</th>`).join('') + '</tr>';
+  const body = rows.map(r => '<tr>' + cols.map(c => {
+    let v = c.fn ? c.fn(r) : esc(fmt(r[c.key]));
+    if (c.key === barCol && max > 0) {
+      const w = Math.round(100 * Math.abs(+r[c.key] || 0) / max);
+      return `<td class="n bar-cell"><i style="width:${w}%"></i><span>${v}</span></td>`;
+    }
+    return `<td class="${c.num ? 'n' : ''}">${v}</td>`;
+  }).join('') + '</tr>').join('');
+  el.innerHTML = head + body;
+}
+const ICOL = [[8.5, '#2e7d32', '8.5–10 best'], [7, '#9ccc65', '7–8.5'], [5, '#fbc02d', '5–7'], [3, '#ef6c00', '3–5'], [-Infinity, '#b71c1c', '1–3 worst']];
+const icol = v => v == null ? '#d9d6dc' : ICOL.find(c => +v >= c[0])[1];
+const WLAB = { on_time_pct: 'on time', median_min: 'typical delay', buffer_min: 'extra time to plan', bunched_pct: 'bunching', gain_per_km_s: 'delay added per km' };
+let dmapObj = null, dLayer = null, dGeo = null;
+function drawDistricts(d) {
+  const rows = d.districts || [];
+  const failed = (d.summary && d.summary.failed_panels || []).some(f => f.startsWith('districts'));
+  table('districts', rows, [{ key: 'rank', label: '#', num: true }, { key: 'district', label: 'District' },
+    { key: 'index', label: 'Index (1–10)', num: true }, { key: 'on_time_pct', label: 'On time (%)', num: true },
+    { key: 'median_min', label: 'Typical delay (min)', num: true }, { key: 'buffer_min', label: 'Extra time to plan (min)', num: true },
+    { key: 'bunched_pct', label: 'Arrived in a bunch (%)', num: true }, { key: 'gain_per_km_s', label: 'Added per km (s)', num: true }, obs], 'index',
+    failed ? 'The district table is not set up yet: run scripts/build_district_reference.py and sql/05_create_stop_district.sql.' : 'No district data yet.');
+  const w = d.district_weights;
+  document.getElementById('dweights').textContent = w ? 'Weights: ' + Object.entries(w).map(([k, v]) => `${WLAB[k] || k} ${Math.round(v * 100)} %`).join(' · ') +
+    '. Districts with fewer than 5,000 arrivals are left out.' : '';
+  const info = document.getElementById('dmapInfo');
+  if (typeof L === 'undefined') { info.textContent = 'The map library could not be loaded.'; return; }
+  const by = Object.fromEntries(rows.map(r => [String(r.district_num), r]));
+  const paint = () => {
+    if (!dmapObj) {
+      dmapObj = L.map('dmap', { zoomSnap: 0.25, scrollWheelZoom: false }).setView([47.4979, 19.0702], 10.5);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 16, referrerPolicy: 'strict-origin-when-cross-origin',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(dmapObj);
+      const lg = L.control({ position: 'bottomright' });
+      lg.onAdd = () => { const div = L.DomUtil.create('div', 'legend');
+        div.innerHTML = '<b>Reliability index</b><br>' + ICOL.map(c => `<i style="background:${c[1]};height:10px"></i>${c[2]}`).join('<br>'); return div; };
+      lg.addTo(dmapObj);
+    }
+    if (dLayer) dLayer.remove();
+    dLayer = L.geoJSON(dGeo, {
+      style: f => ({ fillColor: icol((by[f.properties.district_num] || {}).index), fillOpacity: 0.75, color: '#fff', weight: 1.2 }),
+      onEachFeature: (f, l) => { const r = by[f.properties.district_num];
+        l.bindTooltip(`<b>${esc(f.properties.district)}</b><br>` + (r ? `index ${r.index} · rank ${r.rank} of ${rows.length}<br>on time ${r.on_time_pct} % · typical delay ${r.median_min} min` : 'not enough data')); }
+    }).addTo(dmapObj);
+    if (!dmapObj._fitted) { dmapObj.invalidateSize(); dmapObj.fitBounds(dLayer.getBounds(), { padding: [8, 8] }); dmapObj._fitted = true; }
+    info.textContent = rows.length ? `${rows.length} districts with enough data (${d.view || ''}).` : '';
+  };
+  if (dGeo) paint();
+  else fetch('districts.geojson?' + Date.now()).then(r => r.ok ? r.json() : null).then(g => {
+    if (!g) { info.textContent = 'The district map is not uploaded yet (scripts/build_district_reference.py).'; return; }
+    dGeo = g; paint(); }).catch(e => { info.textContent = 'Could not load the district map: ' + e; });
+}
+const charts = {};
+const COLORS = ['#6b2fa0', '#c98a1b'];
+function chart(canvasId, wrapId, labels, datasets, kind, fallbackRows, fallbackCols) {
+  const wrap = document.getElementById(wrapId);
+  if (charts[canvasId]) { charts[canvasId].destroy(); delete charts[canvasId]; }
+  const old = document.getElementById(canvasId + 'Table'); if (old) old.remove();
+  let canvas = document.getElementById(canvasId);
+  if (!canvas) { canvas = document.createElement('canvas'); canvas.id = canvasId; wrap.appendChild(canvas); }
+  try {
+    if (!labels.length) throw new Error('no data');
+    if (typeof Chart === 'undefined') throw new Error('chart library unavailable');
+    charts[canvasId] = new Chart(canvas, {
+      type: kind,
+      data: { labels, datasets: datasets.map((d, i) => ({ label: d.label, data: d.data, spanGaps: true,
+        backgroundColor: COLORS[i % 2], borderColor: COLORS[i % 2] })) },
+      options: { plugins: { legend: { display: datasets.length > 1 } },
+                 scales: { y: { beginAtZero: true, title: { display: true, text: 'minutes' } } } }
+    });
+  } catch (e) {
+    canvas.remove();
+    const t = document.createElement('table'); t.id = canvasId + 'Table';
+    wrap.appendChild(t);
+    table(t.id, fallbackRows, fallbackCols, fallbackCols[fallbackCols.length - 1].key);
+  }
+}
+const obs = { key: 'observations', label: 'Arrivals', num: true };
+function render(d) {
+  const s = d.summary || {};
+  document.getElementById('sub').textContent =
+    `Updated ${d.generated_utc} UTC · ${d.view || 'last ' + d.window_days + ' days'}` + (s.first_day ? ` · data from ${s.first_day} to ${s.last_day}` : '');
+  document.getElementById('stats').innerHTML = [
+    ['Hours of data', s.hours_collected], ['Days', s.days],
+    ['Arrivals measured', s.rows ? s.rows.toLocaleString('en-US') : '–'],
+    ['Data read for this page', s.mb_scanned ? s.mb_scanned + ' MB' : '–']
+  ].map(([l, n]) => `<div class="stat"><div class="n">${fmt(n)}</div><div class="l">${l}</div></div>`).join('');
+  if (s.days) {
+    const w = document.getElementById('coverageWarn');
+    w.hidden = false;
+    w.textContent = `These results come from ${s.days} day(s) and about ${s.hours_collected} hours of data. ` +
+      `The student lab sleeps after four hours, so some hours (mostly at night) are missing. ` +
+      `Lines and comparisons based on few arrivals can still change a lot.`;
+  }
+
+  document.getElementById('h-hot').textContent = `Average delay of each line over all its stops (${d.view || 'last ' + d.window_days + ' days'}). Lines with over 200 arrivals; “few data” = under 1,000 arrivals, so less certain.`;
+  window.firstHotspot = (d.hotspots && d.hotspots[0]) ? d.hotspots[0].route + '|' + d.hotspots[0].type : null;
+  table('hotspots', d.hotspots, [
+    { key: 'route', label: 'Line', fn: r => esc(r.route) + (+r.observations < 1000 ? '<span class="tag">few data</span>' : '') },
+    { key: 'type', label: 'Type' }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true },
+    { key: 'p95_delay_min', label: 'Bad-day delay (min)', num: true }], 'avg_delay_min');
+  table('punctuality', d.punctuality, [{ key: 'type', label: 'Type' }, obs,
+    { key: 'on_time_pct', label: 'On time (%)', num: true }, { key: 'late_5min_pct', label: 'Over 5 min late (%)', num: true }], 'on_time_pct');
+  table('peak', d.peak, [{ key: 'period', label: 'When' }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'on_time_pct', label: 'On time (%)', num: true }], 'avg_delay_min');
+  table('byType', d.by_type, [{ key: 'type', label: 'Type' }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'p95_delay_min', label: 'Bad-day delay (min)', num: true }], 'avg_delay_min');
+
+  table('segments', d.segments, [{ key: 'segment', label: 'Stretch (from → to)' }, { key: 'route', label: 'Line' }, obs,
+    { key: 'avg_gain_s', label: 'Delay added (s)', num: true }], 'avg_gain_s', 'Needs data from the new processing (from November 2026).');
+  table('slowest', d.slowest_segments, [{ key: 'segment', label: 'Stretch (from → to)' }, { key: 'route', label: 'Line' },
+    { key: 'speed_samples', label: 'Speed readings', num: true }, { key: 'avg_speed_kmh', label: 'Average speed (km/h)', num: true }], 'avg_speed_kmh',
+    'Vehicle positions are collected from 2 November 2026.');
+  drawDistricts(d);
+  table('kpiTable', d.kpis, [{ key: 'kpi', label: 'KPI' }, { key: 'target', label: 'Target' }, { key: 'latest', label: 'Latest' },
+    { key: 'on_target', label: 'On target' },
+    { key: 'status', label: 'Status', fn: r => r.status === true ? '<span class="ok">✓ met</span>' : r.status === false ? '<span class="bad">✗ not met</span>' : '–' }],
+    null, 'KPIs appear after the next dashboard refresh.');
+  table('zones', d.by_zone, [{ key: 'zone', label: 'Zone', fn: r => ({ inner: 'city centre (under 3 km)', middle: 'middle ring (3–8 km)', outer: 'outskirts (over 8 km)' })[r.zone] || esc(r.zone) }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true },
+    { key: 'on_time_pct', label: 'On time (%)', num: true }], 'avg_delay_min');
+  table('worstStops', d.worst_stops, [{ key: 'stop', label: 'Stop' }, { key: 'route', label: 'Line' }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }], 'avg_delay_min');
+
+  // one row per feature and group; zone columns side by side (per km)
+  const infra = {};
+  (d.infrastructure || []).forEach(r => {
+    const k = r.factor + '|' + r.grp;
+    const row = infra[k] = infra[k] || { factor: r.factor, grp: r.grp };
+    if (r.zone === 'all') { row.observations = r.observations; row.avg_gain_s = r.avg_gain_s; row.km_all = r.gain_per_km_s; }
+    else { row['km_' + r.zone] = r.gain_per_km_s; row['n_' + r.zone] = +r.observations; }
+  });
+  const zoneCell = z => r => r['km_' + z] == null ? '–'
+    : `<span title="${r['n_' + z]} observations" style="${r['n_' + z] < 300 ? 'color:#a9a4ad' : ''}">${esc(r['km_' + z])}</span>`;
+  table('infrastructure', Object.values(infra), [{ key: 'factor', label: 'Street feature' }, { key: 'grp', label: 'Present?' }, obs,
+    { key: 'avg_gain_s', label: 'Added between stops (s)', num: true },
+    { key: 'km_all', label: 'Added per km (s)', num: true },
+    { key: 'km_inner', label: 'Per km, city centre', num: true, fn: zoneCell('inner') },
+    { key: 'km_middle', label: 'Per km, middle ring', num: true, fn: zoneCell('middle') },
+    { key: 'km_outer', label: 'Per km, outskirts', num: true, fn: zoneCell('outer') }], 'km_all');
+  table('disruptions', d.disruptions, [{ key: 'category', label: 'BKK notice' }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'on_time_pct', label: 'On time (%)', num: true }], 'avg_delay_min',
+    'Disruption notices are collected from 2 November 2026.');
+  const w = d.weather_conditions && d.weather_conditions.length ? d.weather_conditions : (d.weather_effect || []);
+  document.getElementById('h-weather').textContent = w.length < 2
+    ? 'Only one weather condition so far, so there is nothing to compare yet.'
+    : 'Weather in that hour: snow, fog, rain, strong wind or dry. Rain mostly falls on busy days, so the next panel gives the fair comparison.';
+  table('weather', w, [{ key: 'weather', label: 'Weather' }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true }], 'avg_delay_min');
+  table('light', d.light, [{ key: 'light', label: 'Light' }, obs, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true }], 'avg_gain_s');
+  table('carry', d.carry_over, [{ key: 'previous_trip_late', label: 'Previous trip ended', fn: r => esc(String(r.previous_trip_late).replace(/^\d: /, '')) },
+    { key: 'trips', label: 'Trips', num: true }, { key: 'avg_start_delay_min', label: 'This trip starts late by (min)', num: true }], 'avg_start_delay_min',
+    'Needs vehicle positions (collected from 2 November 2026).');
+  table('bunching', d.bunching, [{ key: 'route', label: 'Line' }, { key: 'type', label: 'Type' },
+    { key: 'arrivals', label: 'Arrivals', num: true }, { key: 'bunched_pct', label: 'Arrived in a bunch (%)', num: true }], 'bunched_pct');
+
+  table('sources', d.delay_sources, [{ key: 'route', label: 'Line' }, { key: 'trips', label: 'Trips', num: true },
+    { key: 'start_min', label: 'Late at the start (min)', num: true }, { key: 'en_route_min', label: 'Added on the way (min)', num: true },
+    { key: 'end_min', label: 'Late at the end (min)', num: true }], 'end_min');
+  table('lateStarts', d.late_starts, [{ key: 'route', label: 'Line' }, { key: 'type', label: 'Type' },
+    { key: 'trips', label: 'Trips', num: true }, { key: 'avg_start_delay_min', label: 'Average delay at the start (min)', num: true },
+    { key: 'late_start_pct', label: 'Started 3+ min late (%)', num: true }], 'avg_start_delay_min');
+  table('pipeline', d.pipeline, [{ key: 'dt', label: 'Day' }, { key: 'job_version', label: 'Job version', num: true },
+    { key: 'raw_stop_updates', label: 'Raw records', num: true, fn: r => (+r.raw_stop_updates || 0).toLocaleString('en-US') },
+    { key: 'curated_rows', label: 'Clean rows', num: true, fn: r => (+r.curated_rows || 0).toLocaleString('en-US') },
+    { key: 'unmatched_bkk_trip_pct', label: 'Not matched (%)', num: true }, { key: 'rows_with_delay_pct', label: 'With a delay value (%)', num: true },
+    { key: 'unreliable_rows_pct', label: 'Left out as errors (%)', num: true }, { key: 'shifted_trips', label: 'Shifted trips', num: true },
+    { key: 'constant_zero_trips_pct', label: 'Not tracked live (%)', num: true },
+    { key: 'alerts_loaded', label: 'BKK notices', num: true }, { key: 'vp_trip_match_pct', label: 'Vehicles matched (%)', num: true },
+    { key: 'warnings', label: 'Warnings', num: true }]);
+  table('suspects', d.suspect_trips, [{ key: 'route', label: 'Line' }, { key: 'trip_id', label: 'Trip ID' },
+    { key: 'days', label: 'Days', num: true }, { key: 'avg_min_delay', label: 'Late at every stop by at least (min)', num: true }], 'avg_min_delay',
+    'None: no trip looks like a recurring data error.');
+  table('coverage', d.coverage, [{ key: 'dt', label: 'Day' }, { key: 'hours_collected', label: 'Hours of data', num: true },
+    { key: 'snapshots', label: '5-minute snapshots', num: true }, { key: 'rows_stored', label: 'Arrivals', num: true },
+    { key: 'on_time_pct', label: 'On time (%)', num: true }, { key: 'avg_delay_min', label: 'Average delay (min)', num: true }], 'hours_collected');
+
+  const DAYS = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  table('weekdays', d.weekdays, [{ key: 'day_of_week', label: 'Day', fn: r => DAYS[+r.day_of_week] || r.day_of_week },
+    { key: 'days', label: 'Days', num: true }, obs, { key: 'avg_delay_min', label: 'Average delay (min)', num: true },
+    { key: 'on_time_pct', label: 'On time (%)', num: true }, { key: 'peak_on_time_pct', label: 'Rush hour on time (%)', num: true }], 'avg_delay_min');
+  table('wowTotal', d.week_over_week_total, [{ key: 'week', label: 'Week' }, { key: 'days', label: 'Days', num: true }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'on_time_pct', label: 'On time (%)', num: true }]);
+  table('wow', d.week_over_week, [{ key: 'route', label: 'Line' }, { key: 'type', label: 'Type' },
+    { key: 'previous_week_min', label: 'Last week (min)', num: true }, { key: 'this_week_min', label: 'This week (min)', num: true },
+    { key: 'change_min', label: 'Change (min; + = worse)', num: true, fn: r => (+r.change_min > 0 ? '+' : '') + esc(r.change_min) }], 'change_min',
+    'Needs two full weeks of data (from about 12 November 2026).');
+  table('special', d.special_days, [{ key: 'day', label: 'Day' }, { key: 'day_type', label: 'Type' }, { key: 'days', label: 'Days', num: true }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'on_time_pct', label: 'On time (%)', num: true }], 'avg_delay_min');
+  table('cemetery', d.cemetery_lines, [{ key: 'route', label: 'Line' },
+    { key: 'holiday_min', label: '1 Nov (min)', num: true }, { key: 'other_holidays_min', label: 'Other holidays (min)', num: true },
+    { key: 'holiday_extra_min', label: 'Extra (min)', num: true },
+    { key: 'workday_min', label: '2 Nov (min)', num: true }, { key: 'other_workdays_min', label: 'Other workdays (min)', num: true },
+    { key: 'workday_extra_min', label: 'Extra (min)', num: true }], null, 'No cemetery lines with enough data.');
+  table('reliability', d.reliability, [{ key: 'route', label: 'Line' }, { key: 'type', label: 'Type' }, obs,
+    { key: 'median_min', label: 'Typical delay (min)', num: true }, { key: 'p95_min', label: 'Bad-day delay (min)', num: true },
+    { key: 'buffer_min', label: 'Extra time to plan (min)', num: true }], 'buffer_min');
+  table('early', d.early, [{ key: 'route', label: 'Line' }, { key: 'type', label: 'Type' }, obs,
+    { key: 'early_pct', label: 'Early arrivals (%)', num: true }, { key: 'avg_early_min', label: 'How early, on average (min)', num: true }], 'early_pct');
+  table('congestionTotal', d.congestion_total, [{ key: 'type', label: 'Type' }, { key: 'night_kmh', label: 'At night (km/h)', num: true },
+    { key: 'peak_kmh', label: 'Rush hour (km/h)', num: true }, { key: 'slowdown_pct', label: 'Slower in rush hour (%)', num: true }], 'slowdown_pct',
+    'Not enough night and peak measurements yet.');
+  table('congestion', d.congestion, [{ key: 'segment', label: 'Stretch (from → to)' }, { key: 'line', label: 'Line' },
+    { key: 'night_kmh', label: 'At night (km/h)', num: true }, { key: 'peak_kmh', label: 'Rush hour (km/h)', num: true },
+    { key: 'slowdown_pct', label: 'Slower in rush hour (%)', num: true }, { key: 'peak_samples', label: 'Rush-hour readings', num: true }], 'slowdown_pct');
+  // turnaround: rows = scheduled turnaround, columns = how late the previous trip finished
+  const turn = {};
+  (d.turnaround || []).forEach(r => { const row = turn[r.turnaround] = turn[r.turnaround] || { turnaround: r.turnaround };
+    row[r.previous_late] = r.start_delay_min; row['n_' + r.previous_late] = +r.trips; });
+  const cell = k => r => r[k] == null ? '–'
+    : `<span title="${r['n_' + k]} trips" style="${r['n_' + k] < 50 ? 'color:#a9a4ad' : ''}">${esc(fmt(r[k]))}</span>`;
+  table('turnaround', Object.values(turn).sort((x, y) => x.turnaround.localeCompare(y.turnaround)),
+    [{ key: 'turnaround', label: 'Planned break at the terminal', fn: r => esc(r.turnaround.replace(/^\d: /, '')) },
+     { key: 'p1', label: 'Previous trip under 2 min late', num: true, fn: cell('p1') }, { key: 'p2', label: '2–5 min', num: true, fn: cell('p2') },
+     { key: 'p3', label: '5–10 min', num: true, fn: cell('p3') }, { key: 'p4', label: 'over 10 min', num: true, fn: cell('p4') }], null,
+    'Needs vehicle positions and the v8 processing.');
+  table('rainType', d.rain_by_type, [{ key: 'type', label: 'Type' }, { key: 'rain_observations', label: 'Rainy arrivals', num: true },
+    { key: 'dry_min', label: 'Dry, same hours (min)', num: true }, { key: 'rain_min', label: 'Rain (min)', num: true },
+    { key: 'extra_min', label: 'Extra in rain (min)', num: true, fn: r => (+r.extra_min > 0 ? '+' : '') + esc(fmt(r.extra_min)) }], 'extra_min',
+    'Not enough rainy hours with dry hours to compare yet.');
+  const strip = v => esc(String(v).replace(/^\d: /, ''));
+  table('temperature', d.temperature, [{ key: 'temperature', label: 'Temperature', fn: r => strip(r.temperature) }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true }], 'avg_delay_min');
+  table('busyStops', d.busy_stops, [{ key: 'lines_at_stop', label: 'Lines serving the stop', fn: r => strip(r.lines_at_stop) },
+    { key: 'metro_or_hev', label: 'Metro or HÉV transfer' }, obs, { key: 'avg_gain_s', label: 'Added after leaving the stop (s)', num: true }], 'avg_gain_s');
+  table('stopDensity', d.stop_density, [{ key: 'stops_per_km', label: 'Stops per km', fn: r => strip(r.stops_per_km) },
+    { key: 'lines', label: 'Lines', num: true }, obs, { key: 'gain_per_km_s', label: 'Added per km (s)', num: true },
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }], 'gain_per_km_s');
+  table('school', d.school_break, [{ key: 'period', label: 'Period' }, { key: 'days', label: 'Days', num: true }, obs,
+    { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'on_time_pct', label: 'On time (%)', num: true },
+    { key: 'morning_peak_on_time_pct', label: 'Morning rush on time (%)', num: true }], 'avg_delay_min');
+  table('unusual', d.unusual_hours, [{ key: 'service_date', label: 'Day' }, { key: 'hour_local', label: 'Hour', fn: r => esc(r.hour_local) + ':00' },
+    { key: 'route', label: 'Line' }, { key: 'type', label: 'Type' }, obs,
+    { key: 'median_min', label: 'Typical delay (min)', num: true }, { key: 'p95_min', label: 'Bad-day delay (min)', num: true },
+    { key: 'notice', label: 'BKK notice' }], 'median_min', 'No unusual hours in this period.');
+
+  const cov = d.coverage || [];
+  chart('trendChart', 'trendWrap', cov.map(r => r.dt), [{ label: 'average delay (min)', data: cov.map(r => +r.avg_delay_min) }], 'line',
+    cov, [{ key: 'dt', label: 'Day' }, { key: 'avg_delay_min', label: 'Average delay (min)', num: true }]);
+  const bh = d.by_hour || [];
+  const hours = [...new Set(bh.map(r => +r.hour_local))].sort((a, b) => a - b);
+  const series = kind => hours.map(hh => { const r = bh.find(x => +x.hour_local === hh && x.day_kind === kind); return r ? +r.avg_delay_min : null; });
+  chart('hourChart', 'hourWrap', hours.map(hh => hh + ':00'),
+    [{ label: 'workday', data: series('workday') }, { label: 'weekend / holiday', data: series('weekend / holiday') }], 'line',
+    bh, [{ key: 'hour_local', label: 'Hour' }, { key: 'day_kind', label: 'Day' }, obs, { key: 'avg_delay_min', label: 'Average delay (min)', num: true }]);
+
+  document.getElementById('note').textContent = d.note || '';
+  document.getElementById('attr').textContent = d.attribution || '';
+  document.getElementById('failed').textContent = (s.failed_panels && s.failed_panels.length)
+    ? 'Some panels could not be refreshed: ' + s.failed_panels.join(' · ') : '';
+}
+
+const FILES = { week: 'data.json', all: 'data_all.json' };
+const LINE_FILES = { week: 'lines.json', all: 'lines_all.json' };
+const MAP_FILES = { week: 'map.json', all: 'map_all.json' };
+let currentView = 'week', linesData = null, linesView = null, mapObj = null, mapLayer = null, mapView = null, wanted = { lines: false, map: false };
+
+const natural = (a, b) => a.localeCompare(b, 'hu', { numeric: true });
+function loadLines() {
+  if (linesView === currentView) return;
+  linesView = currentView;
+  fetch(LINE_FILES[currentView] + '?' + Date.now()).then(r => r.json()).then(j => {
+    linesData = j.lines || {};
+    const sel = document.getElementById('lineSelect');
+    const keep = sel.value;
+    const all = Object.values(linesData);
+    const keys = [...new Set(all.map(l => l.route + '|' + l.type))].sort(natural);
+    const typesOf = r => new Set(all.filter(l => l.route === r).map(l => l.type)).size;
+    sel.innerHTML = keys.map(k => { const [r, t] = k.split('|');
+      return `<option value="${esc(k)}">${esc(r)}${typesOf(r) > 1 ? ' (' + esc(t) + ')' : ''}</option>`; }).join('');
+    sel.value = keys.includes(keep) ? keep : (keys.includes(window.firstHotspot) ? window.firstHotspot : keys[0]);
+    showLine(sel.value);
+  }).catch(e => { document.getElementById('lineInfo').textContent = 'Could not load line data: ' + e; });
+}
+function showLine(key, dir) {
+  const dirs = Object.values(linesData).filter(l => l.route + '|' + l.type === key).sort((a, b) => a.dir - b.dir);
+  if (!dirs.length) return;
+  const cur = dirs.find(l => l.dir === dir) || dirs[0];
+  document.getElementById('dirButtons').innerHTML = dirs.map(l =>
+    `<button type="button" data-dir="${l.dir}" aria-pressed="${l.dir === cur.dir}">${l.circular ? 'circular' : 'towards ' + esc(l.headsign || 'direction ' + l.dir)}</button>`).join(' ');
+  document.querySelectorAll('#dirButtons button').forEach(b => b.addEventListener('click', () => showLine(key, +b.dataset.dir)));
+  // two stops in a row with the same name are two platforms of one place (e.g. a terminal loop): show them once,
+  // with the later value, because the first platform still shows the timetable
+  const rows = [];
+  cur.stops.forEach(s => {
+    const r = { stop: s[0], observations: s[2], delay_min: s[3], gain_s: s[4] }, last = rows[rows.length - 1];
+    if (last && last.stop === r.stop) {
+      last.observations = Math.max(last.observations, r.observations);
+      if (r.delay_min != null) last.delay_min = r.delay_min;
+      if (r.gain_s != null) last.gain_s = r.gain_s;
+    } else rows.push(r);
+  });
+  document.getElementById('lineInfo').textContent = (cur.circular ? `circular line from ${cur.first}` : `${cur.first || ''} → ${cur.headsign || ''}`)
+    + ` · ${cur.type} · ${rows.length} stops` + (dirs.length === 1 ? ' · runs in one direction only' : '');
+  chart('lineChart', 'lineWrap', rows.map(r => r.stop), [{ label: 'average delay (min)', data: rows.map(r => r.delay_min) }], 'line',
+    rows, [{ key: 'stop', label: 'Stop' }, { key: 'delay_min', label: 'Average delay (min)', num: true }]);
+  table('lineTable', rows, [{ key: 'stop', label: 'Stop' }, obs, { key: 'delay_min', label: 'Average delay (min)', num: true },
+    { key: 'gain_s', label: 'Added since the previous stop (s)', num: true }], 'delay_min');
+}
+document.getElementById('lineSelect').addEventListener('change', e => showLine(e.target.value));
+
+const BINS = [[-Infinity, 0, '#2e7d32', 'makes up time'], [0, 15, '#9ccc65', '0–15 s'], [15, 40, '#fbc02d', '15–40 s'],
+              [40, 90, '#ef6c00', '40–90 s'], [90, Infinity, '#b71c1c', 'over 90 s']];
+const colour = g => BINS.find(b => g >= b[0] && g < b[1])[2];
+function loadMap() {
+  if (mapView === currentView) return;
+  const info = document.getElementById('mapInfo');
+  if (typeof L === 'undefined') { info.textContent = 'The map library could not be loaded.'; return; }
+  mapView = currentView;
+  if (!mapObj) {
+    mapObj = L.map('map', { preferCanvas: true }).setView([47.4979, 19.0702], 11);
+    // OpenStreetMap standard tiles: no key needed, attribution required (greyed out in CSS)
+    // the tile usage policy requires a Referer; set it explicitly in case the site or browser is stricter
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, referrerPolicy: 'strict-origin-when-cross-origin',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(mapObj);
+    window.addEventListener('resize', () => mapObj.invalidateSize());
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = () => { const div = L.DomUtil.create('div', 'legend');
+      div.innerHTML = '<b>Delay added on the stretch</b><br>' + BINS.map(b => `<i style="background:${b[2]}"></i>${b[3]}`).join('<br>'); return div; };
+    legend.addTo(mapObj);
+    // TomTom live traffic: shown straight from TomTom in the viewer's browser and never stored (its terms
+    // forbid storing traffic data). Only offered when deploy.sh tomtom has put a key in tomtom.json.
+    fetch('tomtom.json?' + Date.now()).then(r => r.ok ? r.json() : null).then(cfg => {
+      if (!cfg || !cfg.key) return;
+      mapObj.createPane('traffic').style.zIndex = 350;
+      const traffic = L.tileLayer('https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=' + encodeURIComponent(cfg.key),
+        { pane: 'traffic', opacity: 0.8, maxZoom: 19, attribution: 'Live traffic &copy; TomTom' });
+      const ctl = L.control({ position: 'topright' });
+      ctl.onAdd = () => { const b = L.DomUtil.create('button', 'tt-btn'); b.type = 'button'; b.setAttribute('aria-pressed', 'false');
+        b.textContent = 'Live road traffic (TomTom)';
+        b.title = 'Car traffic right now, from TomTom: green flows freely, red is slow. Not stored.';
+        L.DomEvent.disableClickPropagation(b);
+        b.addEventListener('click', () => { const on = !mapObj.hasLayer(traffic);
+          if (on) traffic.addTo(mapObj); else traffic.remove(); b.setAttribute('aria-pressed', String(on)); });
+        return b; };
+      ctl.addTo(mapObj);
+    }).catch(() => {});
+  }
+  fetch(MAP_FILES[currentView] + '?' + Date.now()).then(r => r.json()).then(j => {
+    if (mapLayer) mapLayer.remove();
+    const segs = j.segments || [];
+    mapLayer = L.layerGroup(segs.sort((a, b) => a[4] - b[4]).map(s => L.polyline([[s[0], s[1]], [s[2], s[3]]],
+      { color: colour(s[4]), weight: s[4] >= 40 ? 4 : 2.5, opacity: 0.85 })
+      .bindTooltip(`${esc(s[7])} → ${esc(s[8])}<br>${s[4]} s added on average · ${s[5]} arrivals · ${s[6]} line(s)`))).addTo(mapObj);
+    if (segs.length && !mapObj._fitted) {
+      // measure the box again first: the map may have been created before the page finished its layout
+      const bounds = L.latLngBounds(segs.flatMap(s => [[s[0], s[1]], [s[2], s[3]]]));
+      const fit = () => { mapObj.invalidateSize(); mapObj.fitBounds(bounds, { padding: [20, 20] }); };
+      fit(); setTimeout(fit, 300);
+      mapObj._fitted = true;
+    }
+    info.textContent = `${segs.length} segments (${j.view || ''}).`;
+  }).catch(e => { info.textContent = 'Could not load map data: ' + e; });
+}
+const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return;
+  if (e.target.id === 'lineWrap') { wanted.lines = true; loadLines(); }
+  if (e.target.id === 'mapWrap') { wanted.map = true; loadMap(); }
+}), { rootMargin: '200px' }) : null;
+if (io) { io.observe(document.getElementById('lineWrap')); io.observe(document.getElementById('mapWrap')); }
+else { wanted = { lines: true, map: true }; }
+function load(view) {
+  currentView = view;
+  if (wanted.lines) loadLines();
+  if (wanted.map) loadMap();
+  document.querySelectorAll('.views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+  document.getElementById('sub').textContent = 'Loading…';
+  fetch(FILES[view] + '?' + Date.now()).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(render)
+    .catch(e => { document.getElementById('sub').innerHTML = '<span class="err">Could not load data: ' + esc(e) + '</span>'; });
+  if (location.hash !== (view === 'all' ? '#all' : '')) history.replaceState(null, '', view === 'all' ? '#all' : location.pathname);
+}
+document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => load(b.dataset.view)));
+window.addEventListener('hashchange', () => load(location.hash === '#all' ? 'all' : 'week'));
+load(location.hash === '#all' ? 'all' : 'week');
+</script>
+</body>
+</html>

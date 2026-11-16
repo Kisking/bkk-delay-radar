@@ -1,0 +1,8 @@
+# never commit keys or local build output
+.env
+*.key
+tomtom.json
+build/
+__pycache__/
+*.pyc
+.DS_Store

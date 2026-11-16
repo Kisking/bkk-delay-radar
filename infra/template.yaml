@@ -1,0 +1,429 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  BKK Delay Radar - the whole pipeline as one stack: buckets, schedules, Lambda functions,
+  the Glue job, the Athena database and the email alerts. Built for the AWS Academy Learner Lab,
+  where new IAM roles cannot be created, so every function uses the existing LabRole.
+
+Parameters:
+  LabRoleArn:
+    Type: String
+    Description: ARN of the existing LabRole (aws iam get-role --role-name LabRole --query Role.Arn --output text)
+  CodeBucket:
+    Type: String
+    Description: Bucket that already holds the zipped Lambda code and the Glue script
+  CodePrefix:
+    Type: String
+    Default: deploy/
+    Description: Prefix under CodeBucket where the zip files were uploaded
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Email address for alerts. Leave empty to skip the alert topic.
+  PollMinutes:
+    Type: Number
+    Default: 5
+    Description: How often to fetch the live feed, in minutes
+  SchedulesEnabled:
+    Type: String
+    Default: 'ENABLED'
+    AllowedValues: ['ENABLED', 'DISABLED']
+    Description: Set to DISABLED to stop all scheduled work without deleting the stack
+
+Conditions:
+  WantAlerts: !Not [!Equals [!Ref AlertEmail, '']]
+
+Resources:
+
+  DataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'bkk-delay-radar-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'bkk-delay-radar-${AWS::AccountId}-site'
+      WebsiteConfiguration: {IndexDocument: index.html}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+
+  SitePolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicRead
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: bkk-ingest-dlq
+      MessageRetentionPeriod: 1209600
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Condition: WantAlerts
+    Properties:
+      TopicName: bkk-alerts
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+
+  ApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: bkk/api-key
+      Description: BKK Open Data API key. Put the real value in after the stack is created.
+      SecretString: 'replace-me'
+
+  # ---------- Lambda functions ----------
+
+  IngestRtFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bkk-ingest-rt
+      Runtime: python3.12
+      Handler: ingest_rt.handler
+      Role: !Ref LabRoleArn
+      Timeout: 60
+      MemorySize: 256
+      Code: {S3Bucket: !Ref CodeBucket, S3Key: !Sub '${CodePrefix}bkk-ingest-rt.zip'}
+      DeadLetterConfig: {TargetArn: !GetAtt DeadLetterQueue.Arn}
+      Environment:
+        Variables:
+          BUCKET: !Ref DataBucket
+          KINDS: TripUpdates+Alerts+VehiclePositions
+          SECRET_ID: !Ref ApiKeySecret
+
+  IngestWeatherFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bkk-ingest-weather
+      Runtime: python3.12
+      Handler: ingest_weather.handler
+      Role: !Ref LabRoleArn
+      Timeout: 30
+      MemorySize: 128
+      Code: {S3Bucket: !Ref CodeBucket, S3Key: !Sub '${CodePrefix}bkk-ingest-weather.zip'}
+      DeadLetterConfig: {TargetArn: !GetAtt DeadLetterQueue.Arn}
+      Environment:
+        Variables: {BUCKET: !Ref DataBucket}
+
+  IngestStaticFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bkk-ingest-static
+      Runtime: python3.12
+      Handler: ingest_static.handler
+      Role: !Ref LabRoleArn
+      Timeout: 300
+      MemorySize: 512
+      Code: {S3Bucket: !Ref CodeBucket, S3Key: !Sub '${CodePrefix}bkk-ingest-static.zip'}
+      DeadLetterConfig: {TargetArn: !GetAtt DeadLetterQueue.Arn}
+      Environment:
+        Variables: {BUCKET: !Ref DataBucket}
+
+  StartGlueFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bkk-start-glue
+      Runtime: python3.12
+      Handler: start_glue.handler
+      Role: !Ref LabRoleArn
+      Timeout: 30
+      MemorySize: 128
+      Code: {S3Bucket: !Ref CodeBucket, S3Key: !Sub '${CodePrefix}bkk-start-glue.zip'}
+      Environment:
+        Variables: {JOB: !Ref DelayJob}
+
+  PublishFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: bkk-publish
+      Runtime: python3.12
+      Handler: publish_dashboard.handler
+      Role: !Ref LabRoleArn
+      Timeout: 600
+      MemorySize: 512
+      Code: {S3Bucket: !Ref CodeBucket, S3Key: !Sub '${CodePrefix}bkk-publish.zip'}
+      Environment:
+        Variables:
+          BUCKET: !Ref DataBucket
+          SITE_BUCKET: !Ref SiteBucket
+          DB: !Ref GlueDatabase
+          DAYS: '7'
+
+  HealthcheckFunction:
+    Type: AWS::Lambda::Function
+    Condition: WantAlerts
+    Properties:
+      FunctionName: bkk-healthcheck
+      Runtime: python3.12
+      Handler: healthcheck.handler
+      Role: !Ref LabRoleArn
+      Timeout: 60
+      MemorySize: 256
+      Code: {S3Bucket: !Ref CodeBucket, S3Key: !Sub '${CodePrefix}bkk-healthcheck.zip'}
+      Environment:
+        Variables:
+          BUCKET: !Ref DataBucket
+          SITE_BUCKET: !Ref SiteBucket
+          TOPIC_ARN: !Ref AlertTopic
+          COLLECT_WINDOW_MIN: '20'
+          EXPECTED_PER_WINDOW: '4'
+          DASHBOARD_MAX_AGE_H: '30'
+
+  # ---------- Glue and Athena ----------
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput: {Name: bkk, Description: 'BKK Delay Radar curated data'}
+
+  DelayJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: bkk-delay-job
+      Role: !Ref LabRoleArn
+      GlueVersion: '4.0'
+      WorkerType: G.1X
+      NumberOfWorkers: 2
+      Command:
+        Name: glueetl
+        PythonVersion: '3'
+        ScriptLocation: !Sub 's3://${CodeBucket}/${CodePrefix}delay_job.py'
+      DefaultArguments:
+        '--additional-python-modules': gtfs-realtime-bindings
+        '--BUCKET': !Ref DataBucket
+        '--DT': '2026-01-01'
+
+  DelaysTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: delays
+        TableType: EXTERNAL_TABLE
+        PartitionKeys: [{Name: dt, Type: string}]
+        Parameters:
+          classification: parquet
+          projection.enabled: 'true'
+          projection.dt.type: date
+          projection.dt.format: yyyy-MM-dd
+          projection.dt.range: 2026-10-29,NOW
+          storage.location.template: !Sub 's3://${DataBucket}/curated/delays/dt=${!dt}'
+        StorageDescriptor:
+          Location: !Sub 's3://${DataBucket}/curated/delays/'
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+          Columns:
+            - {Name: snapshot_ts, Type: string}
+            - {Name: trip_id, Type: string}
+            - {Name: route_id, Type: string}
+            - {Name: route_short_name, Type: string}
+            - {Name: route_type, Type: int}
+            - {Name: headsign, Type: string}
+            - {Name: stop_id, Type: string}
+            - {Name: stop_name, Type: string}
+            - {Name: stop_sequence, Type: int}
+            - {Name: arrival_delay_s, Type: int}
+            - {Name: departure_delay_s, Type: int}
+            - {Name: hour_local, Type: int}
+            - {Name: temperature_2m, Type: double}
+            - {Name: precipitation, Type: double}
+            - {Name: direction_id, Type: int}
+            - {Name: service_date, Type: string}
+            - {Name: day_of_week, Type: int}
+            - {Name: day_type, Type: string}
+            - {Name: is_school_break, Type: boolean}
+            - {Name: special_day, Type: string}
+            - {Name: season, Type: string}
+            - {Name: arrival_hour_local, Type: int}
+            - {Name: is_dark, Type: boolean}
+            - {Name: stop_lat, Type: double}
+            - {Name: stop_lon, Type: double}
+            - {Name: dist_center_km, Type: double}
+            - {Name: zone, Type: string}
+            - {Name: bank, Type: string}
+            - {Name: crosses_danube, Type: boolean}
+            - {Name: on_bus_lane, Type: boolean}
+            - {Name: near_signal, Type: boolean}
+            - {Name: signals_within_300m, Type: int}
+            - {Name: near_mall, Type: boolean}
+            - {Name: trip_length_m, Type: double}
+            - {Name: stops_in_trip, Type: int}
+            - {Name: position_ratio, Type: double}
+            - {Name: segment_length_m, Type: double}
+            - {Name: prev_stop_id, Type: string}
+            - {Name: prev_stop_name, Type: string}
+            - {Name: origin_delay_s, Type: int}
+            - {Name: delay_increment_s, Type: int}
+            - {Name: prediction_lead_s, Type: int}
+            - {Name: sched_headway_s, Type: int}
+            - {Name: actual_headway_s, Type: int}
+            - {Name: bunched, Type: boolean}
+            - {Name: rain, Type: double}
+            - {Name: snowfall, Type: double}
+            - {Name: snow_depth, Type: double}
+            - {Name: wind_speed_10m, Type: double}
+            - {Name: wind_gusts_10m, Type: double}
+            - {Name: visibility, Type: double}
+            - {Name: weather_code, Type: int}
+            - {Name: alert_category, Type: string}
+            - {Name: alert_duration, Type: string}
+            - {Name: alert_stop_change, Type: boolean}
+            - {Name: segment_speed_kmh, Type: double}
+            - {Name: segment_speed_obs, Type: int}
+            - {Name: vehicle_id, Type: string}
+            - {Name: prev_trip_end_delay_s, Type: int}
+            - {Name: quality_flag, Type: string}
+            - {Name: reliable, Type: boolean}
+            - {Name: sched_layover_s, Type: int}
+
+  AthenaWorkGroup:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: bkk
+      State: ENABLED
+      WorkGroupConfiguration:
+        ResultConfiguration:
+          OutputLocation: !Sub 's3://${DataBucket}/athena-results/'
+
+  # ---------- Schedules ----------
+
+  RtSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: bkk-rt-poll
+      Description: Fetch the BKK live feed
+      ScheduleExpression: !Sub 'rate(${PollMinutes} minutes)'
+      State: !Ref SchedulesEnabled
+      Targets: [{Id: '1', Arn: !GetAtt IngestRtFunction.Arn}]
+
+  WeatherSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: bkk-weather-hourly
+      ScheduleExpression: 'rate(1 hour)'
+      State: !Ref SchedulesEnabled
+      Targets: [{Id: '1', Arn: !GetAtt IngestWeatherFunction.Arn}]
+
+  StaticSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: bkk-static-daily
+      Description: Download the timetable in the evening, while the lab is usually awake
+      ScheduleExpression: 'cron(0 19 * * ? *)'
+      State: !Ref SchedulesEnabled
+      Targets: [{Id: '1', Arn: !GetAtt IngestStaticFunction.Arn}]
+
+  GlueSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: bkk-glue-daily
+      Description: Process yesterday
+      ScheduleExpression: 'cron(0 20 * * ? *)'
+      State: !Ref SchedulesEnabled
+      Targets: [{Id: '1', Arn: !GetAtt StartGlueFunction.Arn}]
+
+  PublishSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: bkk-publish-daily
+      ScheduleExpression: 'cron(0 21 * * ? *)'
+      State: !Ref SchedulesEnabled
+      Targets: [{Id: '1', Arn: !GetAtt PublishFunction.Arn}]
+
+  HealthcheckSchedule:
+    Type: AWS::Events::Rule
+    Condition: WantAlerts
+    Properties:
+      Name: bkk-healthcheck-hourly
+      ScheduleExpression: 'rate(1 hour)'
+      State: !Ref SchedulesEnabled
+      Targets: [{Id: '1', Arn: !GetAtt HealthcheckFunction.Arn}]
+
+  # ---------- Permissions for EventBridge to invoke the functions ----------
+
+  RtPermission:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref IngestRtFunction, Action: lambda:InvokeFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt RtSchedule.Arn}
+  WeatherPermission:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref IngestWeatherFunction, Action: lambda:InvokeFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt WeatherSchedule.Arn}
+  StaticPermission:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref IngestStaticFunction, Action: lambda:InvokeFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt StaticSchedule.Arn}
+  GluePermission:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref StartGlueFunction, Action: lambda:InvokeFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt GlueSchedule.Arn}
+  PublishPermission:
+    Type: AWS::Lambda::Permission
+    Properties: {FunctionName: !Ref PublishFunction, Action: lambda:InvokeFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt PublishSchedule.Arn}
+  HealthcheckPermission:
+    Type: AWS::Lambda::Permission
+    Condition: WantAlerts
+    Properties: {FunctionName: !Ref HealthcheckFunction, Action: lambda:InvokeFunction, Principal: events.amazonaws.com, SourceArn: !GetAtt HealthcheckSchedule.Arn}
+
+  # ---------- Alarms ----------
+
+  IngestErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: bkk-ingest-rt-errors
+      AlarmDescription: The fetching function failed
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{Name: FunctionName, Value: !Ref IngestRtFunction}]
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [WantAlerts, [!Ref AlertTopic], !Ref 'AWS::NoValue']
+
+  IngestMissingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: bkk-ingest-rt-missing
+      AlarmDescription: Fewer runs than expected (the lab is probably asleep)
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions: [{Name: FunctionName, Value: !Ref IngestRtFunction}]
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+
+Outputs:
+  DashboardUrl:
+    Description: Open this in a browser
+    Value: !Sub 'http://${SiteBucket}.s3-website-${AWS::Region}.amazonaws.com'
+  DataBucketName:
+    Value: !Ref DataBucket
+  NextStep:
+    Description: What to do after the stack is created
+    Value: !Sub 'Put the real API key in: aws secretsmanager put-secret-value --secret-id ${ApiKeySecret} --secret-string "YOUR-KEY"'
