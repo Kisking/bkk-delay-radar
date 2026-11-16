@@ -12,6 +12,8 @@ delay carried over from the previous trip, slowest segments and the daily trend.
 Questions that need the v4 job columns simply return no rows for days made by the older job."""
 import datetime as dt
 import json
+import io
+import csv
 import os
 import re
 import time
@@ -250,6 +252,13 @@ def build_queries(WINDOW):
           JOIN pl ON pl.name = s.name AND pl.la = s.la AND pl.lo = s.lo
           WHERE {WINDOW} AND {ROAD} AND {INC}
           GROUP BY 1, 2 ORDER BY 1, 2""",
+      "kpi_lines": f"""
+          SELECT route_short_name, count(*) AS observations FROM delays
+          WHERE {WINDOW} AND {HAS_DELAY} GROUP BY 1""",
+      "kpi_stretches": f"""
+          SELECT count(*) AS stretches, count_if(n >= 100) AS reliable FROM (
+            SELECT prev_stop_id, stop_id, count(*) AS n FROM delays
+            WHERE {WINDOW} AND {INC} AND {EN_ROUTE} AND prev_stop_id IS NOT NULL GROUP BY 1, 2)""",
       "districts": f"""
           SELECT d.district_num, d.district,
                  count(*) FILTER (WHERE {HAS_DELAY}) AS observations,
@@ -579,35 +588,78 @@ def dpu_hours(run):
     return dpus * max(run["ExecutionTime"], 60) / 3600.0      # billed per second, at least one minute
 
 
-def build_kpis(out, runs, athena_bytes_per_day):
+# Route types the BKK real-time feed covers: tram, rail (HÉV), bus, trolleybus and their extended codes.
+# Metro, ferries, the funicular and the chairlift are not in the feed, so they are not counted.
+def measured_type(t):
+    return t in (0, 2, 3, 11) or 100 <= t < 200 or 700 <= t < 800 or t in (800, 900)
+
+
+def timetable_lines():
+    """Line names in the latest stored timetable (routes.txt), measured kinds only."""
+    days = []
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix="raw/gtfs_static_txt/", Delimiter="/"):
+        days += [c["Prefix"] for c in page.get("CommonPrefixes", [])]
+    if not days:
+        return set()
+    body = s3.get_object(Bucket=BUCKET, Key=max(days) + "routes.txt")["Body"].read().decode("utf-8-sig")
+    out = set()
+    for r in csv.DictReader(io.StringIO(body)):
+        try:
+            if measured_type(int(r.get("route_type") or -1)) and r.get("route_short_name"):
+                out.add(r["route_short_name"].strip())
+        except ValueError:
+            pass
+    return out
+
+
+def build_kpis(out, runs, athena_bytes_per_day, tt_lines=frozenset()):
     num = lambda v: None if v in (None, "") else float(v)
     cov, pipe = out.get("coverage", []), out.get("pipeline", [])
     rows = []
 
-    def daily(name, target_txt, values, ok, unit):
+    def add(group, name, target_txt, latest, on_target, status):
+        rows.append({"group": group, "kpi": name, "target": target_txt, "latest": latest, "on_target": on_target, "status": status})
+
+    def daily(group, name, target_txt, values, ok, unit):
         vals = [(d, v) for d, v in values if v is not None]
         if not vals:
-            rows.append({"kpi": name, "target": target_txt, "latest": None, "on_target": None, "status": None})
-            return
+            return add(group, name, target_txt, None, None, None)
         last_d, last_v = vals[-1]
         hit = sum(1 for _, v in vals if ok(v))
-        rows.append({"kpi": name, "target": target_txt, "latest": f"{last_v:g}{unit} ({last_d})",
-                     "on_target": f"{hit} of {len(vals)} day{'' if len(vals) == 1 else 's'}", "status": ok(last_v)})
+        add(group, name, target_txt, f"{last_v:g}{unit} ({last_d})",
+            f"{hit} of {len(vals)} day{'' if len(vals) == 1 else 's'}", ok(last_v))
 
-    # the first day of the project started at noon, so it is not a full day
-    full = [r for r in cov if r.get("dt") != START]
-    daily("Feed hours captured a day", "≥ 20 h", [(r["dt"], num(r.get("hours_collected"))) for r in full],
-          lambda v: v >= 20, " h")
-    daily("Records matched to the timetable", "≥ 98 %",
+    # --- does the radar see the network? (the purpose of the project)
+    seen = {r["route_short_name"]: num(r.get("observations")) or 0 for r in out.pop("kpi_lines", []) or []}
+    if tt_lines:
+        good = sorted(l for l in tt_lines if seen.get(l, 0) >= 1000)
+        pct = 100.0 * len(good) / len(tt_lines)
+        add("network", "Timetable lines with reliable data (1,000+ arrivals)", "≥ 90 % of lines",
+            f"{len(good)} of {len(tt_lines)} lines ({pct:.0f} %)", None, pct >= 90)
+        out["kpi_lines_missing"] = sorted(l for l in tt_lines if seen.get(l, 0) < 1000)
+    else:
+        add("network", "Timetable lines with reliable data (1,000+ arrivals)", "≥ 90 % of lines", None, None, None)
+    st = (out.pop("kpi_stretches", []) or [{}])[0]
+    total, good = num(st.get("stretches")), num(st.get("reliable"))
+    if total:
+        pct = 100.0 * good / total
+        add("network", "Stretches with reliable data (100+ arrivals)", "≥ 80 % of stretches",
+            f"{good:,.0f} of {total:,.0f} stretches ({pct:.0f} %)", None, pct >= 80)
+    else:
+        add("network", "Stretches with reliable data (100+ arrivals)", "≥ 80 % of stretches", None, None, None)
+    daily("network", "Records matched to the timetable", "≥ 98 %",
           [(r["dt"], None if num(r.get("unmatched_bkk_trip_pct")) is None else round(100 - num(r["unmatched_bkk_trip_pct"]), 2)) for r in pipe],
           lambda v: v >= 98, " %")
-    daily("Scheduled trips tracked live", "≥ 95 %",
+    daily("network", "Scheduled trips tracked live", "≥ 95 %",
           [(r["dt"], None if num(r.get("constant_zero_trips_pct")) is None else round(100 - num(r["constant_zero_trips_pct"]), 2)) for r in pipe],
           lambda v: v >= 95, " %")
-    daily("Rows left out as data errors", "≤ 5 % a day",
-          [(r["dt"], num(r.get("unreliable_rows_pct"))) for r in pipe], lambda v: v <= 5, " %")
 
-    # freshness: yesterday (Budapest time) is on the page
+    # --- does the pipeline run well?
+    full = [r for r in cov if r.get("dt") != START]          # the first day started at noon
+    daily("pipeline", "Feed hours captured a day", "≥ 20 h", [(r["dt"], num(r.get("hours_collected"))) for r in full],
+          lambda v: v >= 20, " h")
+    daily("pipeline", "Rows left out as data errors", "≤ 5 % a day",
+          [(r["dt"], num(r.get("unreliable_rows_pct"))) for r in pipe], lambda v: v <= 5, " %")
     try:
         from zoneinfo import ZoneInfo
         now = dt.datetime.now(ZoneInfo("Europe/Budapest"))
@@ -615,26 +667,20 @@ def build_kpis(out, runs, athena_bytes_per_day):
         now = dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1)
     yesterday = (now.date() - dt.timedelta(days=1)).isoformat()
     last_day = cov[-1]["dt"] if cov else None
-    rows.append({"kpi": "Yesterday on the dashboard", "target": "every evening by 23:00",
-                 "latest": f"{last_day or '–'}, published {now:%H:%M}", "on_target": None,
-                 "status": None if last_day is None else last_day >= yesterday})
-
-    # processing time and cost from the Glue job's own run history and the data Athena scanned
+    add("pipeline", "Yesterday on the dashboard", "every evening by 23:00",
+        f"{last_day or '–'}, published {now:%H:%M}", None, None if last_day is None else last_day >= yesterday)
     if runs:
         mins = [r["ExecutionTime"] / 60.0 for r in runs]
-        rows.append({"kpi": "Processing time per day", "target": "≤ 15 min", "latest": f"{mins[0]:.1f} min",
-                     "on_target": f"{sum(m <= 15 for m in mins)} of the last {len(mins)} runs", "status": mins[0] <= 15})
+        add("pipeline", "Processing time per day", "≤ 15 min", f"{mins[0]:.1f} min",
+            f"{sum(m <= 15 for m in mins)} of the last {len(mins)} runs", mins[0] <= 15)
         glue_day = sum(dpu_hours(r) for r in runs) / len(runs) * GLUE_DPU_HOUR_USD
         athena_day = athena_bytes_per_day / 1e12 * ATHENA_TB_USD
         month = 30 * (glue_day + athena_day)
-        rows.append({"kpi": "Processing cost per month (Glue + Athena)", "target": "≤ $10",
-                     "latest": f"${month:.2f} (Glue ${30 * glue_day:.2f}, Athena ${30 * athena_day:.2f})",
-                     "on_target": None, "status": month <= 10})
+        add("pipeline", "Processing cost per month (Glue + Athena)", "≤ $10",
+            f"${month:.2f} (Glue ${30 * glue_day:.2f}, Athena ${30 * athena_day:.2f})", None, month <= 10)
     else:
-        rows += [{"kpi": "Processing time per day", "target": "≤ 15 min", "latest": None, "on_target": None, "status": None},
-                 {"kpi": "Processing cost per month (Glue + Athena)", "target": "≤ $10", "latest": None, "on_target": None, "status": None}]
-    rows.append({"kpi": "Same table in 3 accounts", "target": "≤ 0.01 % difference", "latest": "0.006 % (one-off check, 8–10 Nov)",
-                 "on_target": None, "status": True})
+        add("pipeline", "Processing time per day", "≤ 15 min", None, None, None)
+        add("pipeline", "Processing cost per month (Glue + Athena)", "≤ $10", None, None, None)
     return rows
 
 
@@ -723,8 +769,14 @@ def handler(event, context):
         runs = []
         for o in outs.values():
             o["summary"]["failed_panels"].append(f"kpis: Glue run history: {str(e)[:120]}")
+    try:
+        tt = timetable_lines()
+    except Exception as e:
+        tt = set()
+        for o in outs.values():
+            o["summary"]["failed_panels"].append(f"kpis: timetable lines: {str(e)[:120]}")
     for key, out in outs.items():
-        out["kpis"] = build_kpis(out, runs, scanned_total)
+        out["kpis"] = build_kpis(out, runs, scanned_total, tt)
         s3.put_object(Bucket=SITE, Key=key, Body=json.dumps(out),
                       ContentType="application/json", CacheControl="no-cache")
         result[key] = {"days": out["summary"]["days"], "mb_scanned": out["summary"]["mb_scanned"],

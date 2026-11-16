@@ -49,6 +49,7 @@
  .weights{font-size:12px;color:var(--muted);margin-top:8px}
  .tt-btn{font:inherit;font-size:12px;padding:5px 10px;border-radius:14px;border:1px solid #bbb;background:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)}
  .tt-btn[aria-pressed="true"]{background:#2e1a47;color:#fff;border-color:#2e1a47}
+ .kpi-sub{margin:18px 0 4px;font-weight:600;font-size:14px;color:#2e1a47}
  .ok{color:#2e7d32;font-weight:600} .bad{color:#b71c1c;font-weight:600}
  .group-intro{margin:4px 28px 0;font-size:14px;color:var(--muted);max-width:1544px}
  details.guide{margin:16px 28px 0;background:#fff;border:1px solid var(--line);border-radius:10px;max-width:1544px}
@@ -102,7 +103,7 @@
 <dt>–</dt><dd>No data for that cell.</dd>
 <dt><span class="swatch" style="background:#6b2fa0"></span>Purple and <span class="swatch" style="background:#c98a1b"></span>amber lines in charts</dt><dd>Workdays and weekends or holidays.</dd>
 <dt>Map colours</dt><dd><span class="swatch" style="background:#2e7d32"></span>makes up time <span class="swatch" style="background:#9ccc65"></span>0–15 s <span class="swatch" style="background:#fbc02d"></span>15–40 s <span class="swatch" style="background:#ef6c00"></span>40–90 s <span class="swatch" style="background:#b71c1c"></span>over 90 s added</dd>
-<dt>KPI</dt><dd>A measurable target for the project itself (data coverage, quality, speed, cost), not for BKK. See 6 · About the data.</dd>
+<dt>KPI</dt><dd>A measurable target for the project itself: does the radar see enough of the network, and does the pipeline run well. See 6 · About the data.</dd>
 <dt>Reliability index (1–10)</dt><dd>Five measures per district, each scaled between the worst (1) and the best district (10), then weighted. It compares districts with each other, not with a fixed standard.</dd>
 <dt>Live road traffic (TomTom)</dt><dd>A switch on the delay map. It shows car traffic right now, straight from TomTom; we do not store it.</dd>
 <dt>Associations, not causes</dt><dd>When two things go together (for example traffic lights and delay), the table does not prove that one causes the other.</dd>
@@ -179,7 +180,9 @@
 <h3 class="group">6 · About the data</h3>
 <p class="group-intro">Our project KPIs, how much data was collected, how healthy the processing is, and what was left out as errors.</p>
 <main>
-  <section class="wide" id="kpiWrap"><h2>Are we meeting our KPIs?</h2><p class="hint">Eight project KPIs, measured by the pipeline itself. “Latest” is the most recent processed day and sets the status; “On target” counts every day of this view, so an earlier bad day stays visible. Processing time comes from the Glue job's run history, the cost from the measured run time and the data Athena reads (list prices).</p><table id="kpiTable"></table></section>
+  <section class="wide" id="kpiWrap"><h2>Are we meeting our KPIs?</h2><p class="hint">Nine project KPIs, measured by the pipeline itself. The first four show whether the radar sees enough of the network to answer where and why vehicles run late; the other five whether the pipeline runs well. For daily KPIs, “Latest” is the most recent processed day and sets the status, and “On target” counts every day of this view, so an earlier bad day stays visible. Processing time comes from the Glue job's run history, the cost from the measured run time and the data Athena reads (list prices).</p>
+  <p class="kpi-sub">Does the radar see the network?</p><table id="kpiNet"></table><p class="hint" id="kpiMissing"></p>
+  <p class="kpi-sub">Does the pipeline run well?</p><table id="kpiOps"></table></section>
 </main>
 <main>
   <section class="wide"><h2>Is the data processing healthy?</h2><p class="hint">One row per day from the processing job. Healthy: “Not matched” near 0 %, “Left out as errors” a few percent, no warnings. “Not tracked live” = trips with exactly 0 delay at every stop.</p><table id="pipeline"></table></section>
@@ -312,10 +315,14 @@ function render(d) {
     { key: 'speed_samples', label: 'Speed readings', num: true }, { key: 'avg_speed_kmh', label: 'Average speed (km/h)', num: true }], 'avg_speed_kmh',
     'Vehicle positions are collected from 2 November 2026.');
   drawDistricts(d);
-  table('kpiTable', d.kpis, [{ key: 'kpi', label: 'KPI' }, { key: 'target', label: 'Target' }, { key: 'latest', label: 'Latest' },
+  const kcols = [{ key: 'kpi', label: 'KPI' }, { key: 'target', label: 'Target' }, { key: 'latest', label: 'Latest' },
     { key: 'on_target', label: 'On target' },
-    { key: 'status', label: 'Status', fn: r => r.status === true ? '<span class="ok">✓ met</span>' : r.status === false ? '<span class="bad">✗ not met</span>' : '–' }],
-    null, 'KPIs appear after the next dashboard refresh.');
+    { key: 'status', label: 'Status', fn: r => r.status === true ? '<span class="ok">✓ met</span>' : r.status === false ? '<span class="bad">✗ not met</span>' : '–' }];
+  table('kpiNet', (d.kpis || []).filter(r => r.group === 'network'), kcols, null, 'KPIs appear after the next dashboard refresh.');
+  table('kpiOps', (d.kpis || []).filter(r => r.group !== 'network'), kcols, null, 'KPIs appear after the next dashboard refresh.');
+  const lm = d.kpi_lines_missing || [];
+  document.getElementById('kpiMissing').textContent = lm.length
+    ? `Timetable lines with fewer than 1,000 arrivals in this view (${lm.length}): ${lm.slice(0, 60).join(', ')}${lm.length > 60 ? ' …' : ''}. Usually lines with very few trips, such as replacement or school lines.` : '';
   table('zones', d.by_zone, [{ key: 'zone', label: 'Zone', fn: r => ({ inner: 'city centre (under 3 km)', middle: 'middle ring (3–8 km)', outer: 'outskirts (over 8 km)' })[r.zone] || esc(r.zone) }, obs,
     { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true },
     { key: 'on_time_pct', label: 'On time (%)', num: true }], 'avg_delay_min');
