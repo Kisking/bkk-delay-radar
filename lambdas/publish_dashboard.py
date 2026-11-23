@@ -93,10 +93,12 @@ def build_queries(WINDOW):
       "hotspots": f"""
           SELECT route_short_name AS route, {TYPE_CASE} AS type, count(*) AS observations,
                  round(avg(arrival_delay_s) / 60.0, 2) AS avg_delay_min,
-                 round(approx_percentile(arrival_delay_s, 0.95) / 60.0, 2) AS p95_delay_min
+                 round(approx_percentile(arrival_delay_s, 0.95) / 60.0, 2) AS p95_delay_min,
+                 round(approx_percentile(arrival_delay_s, 0.5) / 60.0, 2) AS median_min,
+                 round((approx_percentile(arrival_delay_s, 0.95) - approx_percentile(arrival_delay_s, 0.5)) / 60.0, 2) AS buffer_min
           FROM delays WHERE {WINDOW} AND {HAS_DELAY}
           GROUP BY 1, 2 HAVING count(*) > 200
-          ORDER BY avg_delay_min DESC LIMIT 10""",
+          ORDER BY avg_delay_min DESC LIMIT 20""",
       "punctuality": f"""
           SELECT coalesce(t, 'all') AS type, count(*) AS observations,
                  round(100.0 * avg(ot), 1) AS on_time_pct, round(100.0 * avg(late5), 1) AS late_5min_pct
@@ -210,13 +212,6 @@ def build_queries(WINDOW):
                  count(*) AS observations, round(avg(arrival_delay_s) / 60.0, 2) AS avg_delay_min
           FROM delays WHERE {WINDOW} AND {HAS_DELAY} AND arrival_hour_local IS NOT NULL AND day_type IS NOT NULL
           GROUP BY 1, 2 ORDER BY 1, 2""",
-      "reliability": f"""
-          SELECT route_short_name AS route, {TYPE_CASE} AS type, count(*) AS observations,
-                 round(approx_percentile(arrival_delay_s, 0.5) / 60.0, 2) AS median_min,
-                 round(approx_percentile(arrival_delay_s, 0.95) / 60.0, 2) AS p95_min,
-                 round((approx_percentile(arrival_delay_s, 0.95) - approx_percentile(arrival_delay_s, 0.5)) / 60.0, 2) AS buffer_min
-          FROM delays WHERE {WINDOW} AND {HAS_DELAY}
-          GROUP BY 1, 2 HAVING count(*) > 1000 ORDER BY buffer_min DESC LIMIT 10""",
       "early": f"""
           SELECT route_short_name AS route, {TYPE_CASE} AS type, count(*) AS observations,
                  round(100.0 * avg(CASE WHEN arrival_delay_s < -60 THEN 1 ELSE 0 END), 1) AS early_pct,
