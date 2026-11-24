@@ -389,12 +389,13 @@ def build_queries(WINDOW):
 # Trips that are 30+ minutes late at EVERY stop on two or more days are data errors (a vehicle matched
 # to the wrong trip, night after night), not delays. A real incident happens once; these come back.
 SUSPECT_SQL = f"""
-    WITH t AS (SELECT route_short_name AS r, trip_id, dt, min(arrival_delay_s) AS mn
+    WITH t AS (SELECT route_short_name AS r, trip_id, dt, min(arrival_delay_s) AS mn,
+                      max(CASE WHEN alert_category IN ('traffic', 'accident') THEN 1 ELSE 0 END) AS real_disruption
                FROM delays WHERE dt >= '{START}' AND stop_sequence > 1 AND coalesce(reliable, true)
                     AND arrival_delay_s IS NOT NULL
                GROUP BY 1, 2, 3 HAVING count(*) >= 3)
     SELECT r AS route, trip_id, count(*) AS days, round(avg(mn) / 60.0, 1) AS avg_min_delay
-    FROM t WHERE mn >= 1800 GROUP BY 1, 2 HAVING count(*) >= 2
+    FROM t WHERE mn >= 1800 AND real_disruption = 0 GROUP BY 1, 2 HAVING count(*) >= 2
     ORDER BY days DESC, avg_min_delay DESC LIMIT 500"""
 
 
