@@ -146,7 +146,10 @@ def build_queries(WINDOW):
           FROM delays WHERE {WINDOW} AND {HAS_DELAY} AND dt >= '{ALERTS_FROM}' AND service_date IS NOT NULL
           GROUP BY 1 ORDER BY observations DESC""",
       "weather_conditions": f"""
-          SELECT CASE WHEN snowfall > 0 THEN 'snow' WHEN weather_code IN (45, 48) OR visibility < 1000 THEN 'fog'
+          SELECT CASE WHEN snowfall > 0 THEN 'snowing'
+                      WHEN precipitation > 0.1 AND temperature_2m <= 0 THEN 'icy (rain at 0 °C or below)'
+                      WHEN snow_depth > 0.01 THEN 'snow on the ground'
+                      WHEN weather_code IN (45, 48) OR visibility < 1000 THEN 'fog'
                       WHEN precipitation > 0.1 THEN 'rain' WHEN wind_gusts_10m >= 50 THEN 'strong wind'
                       ELSE 'dry' END AS weather,
                  count(*) AS observations, round(avg(arrival_delay_s) / 60.0, 2) AS avg_delay_min,
@@ -277,8 +280,9 @@ def build_queries(WINDOW):
                 WHERE {WINDOW} AND {ROAD} AND {INC} AND trip_length_m > 1000)
           GROUP BY 1 ORDER BY 1""",
       "temperature": f"""
-          SELECT CASE WHEN temperature_2m < 0 THEN '1: below 0 °C' WHEN temperature_2m < 5 THEN '2: 0-5 °C'
-                      WHEN temperature_2m < 10 THEN '3: 5-10 °C' ELSE '4: 10 °C or more' END AS temperature,
+          SELECT CASE WHEN temperature_2m < -5 THEN '1: below −5 °C' WHEN temperature_2m < 0 THEN '2: −5 to 0 °C'
+                      WHEN temperature_2m < 5 THEN '3: 0-5 °C' WHEN temperature_2m < 10 THEN '4: 5-10 °C'
+                      ELSE '5: 10 °C or more' END AS temperature,
                  count(*) AS observations, round(avg(arrival_delay_s) / 60.0, 2) AS avg_delay_min,
                  round(avg(CASE WHEN {INC} THEN delay_increment_s END), 1) AS avg_gain_s
           FROM delays WHERE {WINDOW} AND {HAS_DELAY} AND temperature_2m IS NOT NULL
@@ -371,18 +375,26 @@ def build_queries(WINDOW):
       "rain_by_type": f"""
           WITH c AS (
             SELECT {TYPE_CASE} AS type, day_type, arrival_hour_local AS h,
-                   avg(CASE WHEN precipitation > 0.1 THEN arrival_delay_s END) AS r,
-                   avg(CASE WHEN precipitation <= 0.1 THEN arrival_delay_s END) AS d,
-                   sum(CASE WHEN precipitation > 0.1 THEN 1 ELSE 0 END) AS nr,
-                   sum(CASE WHEN precipitation <= 0.1 THEN 1 ELSE 0 END) AS nd
-            FROM delays WHERE {WINDOW} AND {HAS_DELAY} AND precipitation IS NOT NULL AND day_type IS NOT NULL
-            GROUP BY 1, 2, 3)
-          SELECT type, sum(nr) AS rain_observations,
-                 round(sum(d * nr) / sum(nr) / 60.0, 2) AS dry_min,
-                 round(sum(r * nr) / sum(nr) / 60.0, 2) AS rain_min,
-                 round(sum((r - d) * nr) / sum(nr) / 60.0, 2) AS extra_min
-          FROM c WHERE nr >= 50 AND nd >= 50
-          GROUP BY 1 HAVING sum(nr) > 1000 ORDER BY rain_observations DESC""",
+                   CASE WHEN coalesce(snowfall, 0) > 0 THEN 'snow' WHEN precipitation > 0.1 THEN 'rain' ELSE 'dry' END AS w,
+                   arrival_delay_s
+            FROM delays WHERE {WINDOW} AND {HAS_DELAY} AND precipitation IS NOT NULL AND day_type IS NOT NULL),
+          g AS (
+            SELECT type, day_type, h,
+                   avg(CASE WHEN w = 'dry' THEN arrival_delay_s END) AS d, avg(CASE WHEN w = 'rain' THEN arrival_delay_s END) AS r,
+                   avg(CASE WHEN w = 'snow' THEN arrival_delay_s END) AS sn,
+                   sum(CASE WHEN w = 'dry' THEN 1 ELSE 0 END) AS nd, sum(CASE WHEN w = 'rain' THEN 1 ELSE 0 END) AS nr,
+                   sum(CASE WHEN w = 'snow' THEN 1 ELSE 0 END) AS ns
+            FROM c GROUP BY 1, 2, 3)
+          SELECT type,
+                 sum(CASE WHEN nr >= 50 AND nd >= 50 THEN nr ELSE 0 END) AS rain_observations,
+                 round(sum(CASE WHEN nr >= 50 AND nd >= 50 THEN (r - d) * nr END)
+                       / nullif(sum(CASE WHEN nr >= 50 AND nd >= 50 THEN nr END), 0) / 60.0, 2) AS rain_extra_min,
+                 sum(CASE WHEN ns >= 50 AND nd >= 50 THEN ns ELSE 0 END) AS snow_observations,
+                 round(sum(CASE WHEN ns >= 50 AND nd >= 50 THEN (sn - d) * ns END)
+                       / nullif(sum(CASE WHEN ns >= 50 AND nd >= 50 THEN ns END), 0) / 60.0, 2) AS snow_extra_min
+          FROM g GROUP BY 1
+          HAVING sum(CASE WHEN nr >= 50 AND nd >= 50 THEN nr ELSE 0 END) > 1000 OR sum(CASE WHEN ns >= 50 AND nd >= 50 THEN ns ELSE 0 END) > 300
+          ORDER BY rain_observations DESC""",
   }
 
 

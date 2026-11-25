@@ -48,11 +48,13 @@
  #dmap .leaflet-tile-pane{filter:grayscale(1) brightness(1.1) contrast(.8)}
  .weights{font-size:12px;color:var(--muted);margin-top:8px}
  .tt-btn{font:inherit;font-size:12px;padding:5px 10px;border-radius:14px;border:1px solid #bbb;background:#fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+ .tt-btn.tt-err{background:#b71c1c;color:#fff;border-color:#b71c1c}
  .tt-btn[aria-pressed="true"]{background:#2e1a47;color:#fff;border-color:#2e1a47}
  details.about{margin:6px 0 10px;border:1px solid var(--line);border-radius:8px;background:#fbf9fd}
  details.about summary{cursor:pointer;padding:7px 12px;font-size:13px;font-weight:600;color:#6b2fa0}
  details.about dl{margin:0;padding:2px 14px 10px;font-size:13px;display:grid;grid-template-columns:130px 1fr;gap:6px 14px}
  details.about dt{font-weight:600;color:#2e1a47} details.about dd{margin:0;color:#3d3944}
+ details.about ul{margin:0;padding-left:18px} details.about li{margin:2px 0}
  details.about dd.see{font-weight:600;color:#2e1a47}
  @media (max-width:700px){details.about dl{grid-template-columns:1fr}}
  .subgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:4px 32px;align-items:start}
@@ -111,7 +113,7 @@
 <dt><span class="sample-grey">12.3</span> Grey number</dt><dd>Based on only a few arrivals: read it with care.</dd>
 <dt>–</dt><dd>No data for that cell.</dd>
 <dt><span class="swatch" style="background:#6b2fa0"></span>Purple and <span class="swatch" style="background:#c98a1b"></span>amber lines in charts</dt><dd>Workdays and weekends or holidays.</dd>
-<dt>Map colours</dt><dd><span class="swatch" style="background:#2e7d32"></span>makes up time <span class="swatch" style="background:#9ccc65"></span>0–15 s <span class="swatch" style="background:#fbc02d"></span>15–40 s <span class="swatch" style="background:#ef6c00"></span>40–90 s <span class="swatch" style="background:#b71c1c"></span>over 90 s added</dd>
+<dt>Map colours</dt><dd><span class="swatch" style="background:#2e7d32"></span>makes up time <span class="swatch" style="background:#9ccc65"></span>0–30 s <span class="swatch" style="background:#fbc02d"></span>30–60 s <span class="swatch" style="background:#ef6c00"></span>1–2 min <span class="swatch" style="background:#b71c1c"></span>over 2 min added</dd>
 <dt>KPI</dt><dd>A measurable target for the project itself: does the radar see enough of the network, and does the pipeline run well. See 6 · About the data.</dd>
 <dt>Reliability index (1–10)</dt><dd>Five measures per district, each scaled between the worst (1) and the best district (10), then weighted. It compares districts with each other, not with a fixed standard.</dd>
 <dt>Live road traffic (TomTom)</dt><dd>A switch on the delay map. It shows car traffic right now, straight from TomTom; we do not store it.</dd>
@@ -124,49 +126,49 @@
 <p class="group-intro">The big picture: which lines are late, when delays happen, how each vehicle type does, and the incidents.</p>
 <main>
   <section class="wide" data-about="lines"><h2>Which lines are the most late?</h2><p class="hint" id="h-hot"></p><div class="tw"><table id="hotspots"></table></div></section>
-  <section class="wide" data-about="time"><h2>Delay over time</h2><p class="hint">Average delay by day (left; days with few hours of data are less certain) and by hour of arrival, Budapest time (right; workdays purple, weekends and holidays amber).</p><div class="subgrid"><div class="sub" id="trendWrap"><p class="kpi-sub">Day by day</p><canvas id="trendChart"></canvas></div><div class="sub" id="hourWrap"><p class="kpi-sub">Through the day</p><canvas id="hourChart"></canvas></div></div></section>
-  <section class="wide" data-about="when"><h2>When is it worst?</h2><p class="hint">Rush hour against the rest of the week, and each weekday. Rush hour = workdays 7–9 and 16–18.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Rush hour and the rest of the week</p><div class="tw"><table id="peak"></table></div></div><div class="sub"><p class="kpi-sub">Day of the week</p><p class="hint">Normal days only (holidays and special days are left out). “Days” = how many of that weekday are in the data; fewer days, less certain.</p><div class="tw"><table id="weekdays"></table></div></div></div></section>
-  <section data-about="vehicles"><h2>How punctual is each vehicle type?</h2><p class="hint">On time = from 1 minute early to 3 minutes late. The metro is not in BKK's real-time data, so it is missing.</p><div class="tw"><table id="vehicleTypes"></table></div></section>
-  <section class="wide" data-about="incidents"><h2>Incidents and BKK disruptions</h2><p class="hint">Hours when a line was very late, and how much later vehicles run while BKK has a disruption notice out (recorded from 2 November).</p><div class="sub"><p class="kpi-sub">Hours with very large delays</p><p class="hint">Each row is one line in one hour when the typical delay was 10 minutes or more: usually an accident, a closure or a crowd. “BKK notice” is the disruption BKK announced at the time (recorded from 2 November).</p><div class="tw"><table id="unusual"></table></div></div><div class="sub"><p class="kpi-sub">Delay while a BKK notice is active</p><p class="hint">Grouped by the BKK notice active on the line at the time: works, traffic, detour, no service and so on. “none” = no notice.</p><div class="tw"><table id="disruptions"></table></div></div></section>
+  <section class="wide" data-about="time"><h2>How does delay change by day and by hour?</h2><p class="hint">Average delay per day (left) and per hour of the day (right).</p><div class="subgrid"><div class="sub" id="trendWrap"><p class="kpi-sub">Day by day</p><canvas id="trendChart"></canvas></div><div class="sub" id="hourWrap"><p class="kpi-sub">Through the day</p><canvas id="hourChart"></canvas></div></div></section>
+  <section class="wide" data-about="when"><h2>Which times of the week are worst?</h2><p class="hint">Punctuality in rush hour, at other times and on each day of the week.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Rush hour and the rest of the week</p><div class="tw"><table id="peak"></table></div></div><div class="sub"><p class="kpi-sub">Day of the week</p><p class="hint">Normal days only; “Days” = how many of that weekday are in the data.</p><div class="tw"><table id="weekdays"></table></div></div></div></section>
+  <section data-about="vehicles"><h2>How punctual is each vehicle type?</h2><p class="hint">Bus, trolleybus, tram and HÉV compared.</p><div class="tw"><table id="vehicleTypes"></table></div></section>
+  <section class="wide" data-about="incidents"><h2>When did something go badly wrong?</h2><p class="hint">Hours with very large delays, and the delay while BKK had a disruption notice out.</p><div class="sub"><p class="kpi-sub">Hours with very large delays</p><p class="hint">One line in one hour with a typical delay of 10+ minutes.</p><div class="tw"><table id="unusual"></table></div></div><div class="sub"><p class="kpi-sub">Delay while a BKK notice is out</p><p class="hint">“none” = no notice.</p><div class="tw"><table id="disruptions"></table></div></div></section>
 </main>
 <h3 class="group">2 · Where is time lost?</h3>
 <p class="group-intro">Places on the network where delay is added: districts, stretches between stops, stops, zones and rush-hour congestion.</p>
 <main>
-  <section class="wide" id="districtWrap" data-about="districts"><h2>Which districts have the most reliable public transport?</h2><p class="hint">A reliability index for each of Budapest's 23 districts, from all arrivals at the district's stops. Five measures are each scaled from 1 (the worst district) to 10 (the best), then weighted and added up, so 10 means best in Budapest. The measures are shown too, because the weights are our choice. District boundaries: © OpenStreetMap contributors.</p>
-  <div class="dgrid"><div><div id="dmap"></div><p class="hint" id="dmapInfo"></p></div><div style="overflow-x:auto"><table id="districts"></table><p class="weights" id="dweights"></p><div class="sub"><p class="kpi-sub">City centre against the outskirts</p><p class="hint">City centre = under 3 km from Deák Ferenc tér, middle ring = 3–8 km, outskirts = over 8 km.</p><div class="tw"><table id="zones"></table></div></div></div></div></section>
-  <section class="wide" data-about="route"><h2>Where along the route is time lost?</h2><p class="hint">Stretches between two stops where the most delay is added, and the stops where vehicles are latest on average.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Stretches that add the most delay</p><p class="hint">Each row is the stretch between two stops of one line, with the average delay added on it. The first and last stretch of a trip are left out; at least 100 arrivals.</p><div class="tw"><table id="segments"></table></div></div><div class="sub"><p class="kpi-sub">Stops with the largest average delay</p><p class="hint">Each row is one line at one stop. A stop high on this list is often late because of what happened before it, not at it.</p><div class="tw"><table id="worstStops"></table></div></div></div></section>
-  <section class="wide" data-about="speed"><h2>Where are buses slow?</h2><p class="hint">Measured bus and trolleybus speed from BKK vehicle positions: how much slower rush hour is than night, and the slowest stretches. Night lines (9xx) and the first and last stretch of a trip are left out.</p><div class="sub"><p class="kpi-sub">Rush hour against night, network average</p><div class="tw"><table id="congestionTotal"></table></div></div><div class="subgrid"><div class="sub"><p class="kpi-sub">Stretches that slow down most in rush hour</p><p class="hint">At least 10 speed readings in both rush hour and night.</p><div class="tw"><table id="congestion"></table></div></div><div class="sub"><p class="kpi-sub">Slowest stretches overall</p><div class="tw"><table id="slowest"></table></div></div></div></section>
+  <section class="wide" id="districtWrap" data-about="districts"><h2>Which districts have the most reliable public transport?</h2><p class="hint">A 1–10 reliability index per district, and the delay by distance from the centre. District boundaries: © OpenStreetMap contributors.</p>
+  <div class="dgrid"><div><div id="dmap"></div><p class="hint" id="dmapInfo"></p></div><div style="overflow-x:auto"><table id="districts"></table><p class="weights" id="dweights"></p><div class="sub"><p class="kpi-sub">City centre against the outskirts</p><p class="hint">Under 3 km, 3–8 km and over 8 km from Deák Ferenc tér.</p><div class="tw"><table id="zones"></table></div></div></div></div></section>
+  <section class="wide" data-about="route"><h2>Where along the routes is time lost?</h2><p class="hint">The stretches that add the most delay, and the stops where vehicles are latest.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Stretches that add the most delay</p><p class="hint">At least 100 arrivals; first and last stretches left out.</p><div class="tw"><table id="segments"></table></div></div><div class="sub"><p class="kpi-sub">Stops with the largest average delay</p><p class="hint">Includes the delay from earlier stretches.</p><div class="tw"><table id="worstStops"></table></div></div></div></section>
+  <section class="wide" data-about="speed"><h2>Where are buses slow, and how much does rush hour slow them?</h2><p class="hint">Measured speeds: rush hour against night, and the slowest stretches.</p><div class="sub"><p class="kpi-sub">Rush hour against night, network average</p><div class="tw"><table id="congestionTotal"></table></div></div><div class="subgrid"><div class="sub"><p class="kpi-sub">Stretches that slow down most in rush hour</p><p class="hint">At least 10 speed readings in both rush hour and night.</p><div class="tw"><table id="congestion"></table></div></div><div class="sub"><p class="kpi-sub">Slowest stretches overall</p><div class="tw"><table id="slowest"></table></div></div></div></section>
 </main>
 <h3 class="group">3 · What goes with more delay?</h3>
 <p class="group-intro">Street features, weather, disruptions and operations compared. These are associations, not proof of cause.</p>
 <main>
-  <section class="wide" data-about="street"><h2>Does the street matter?</h2><p class="hint">Delay added before a stop, by street feature, by the size of the stop and by how dense the stops are. Bus and trolleybus. Associations, not proof of cause.</p><div class="sub"><p class="kpi-sub">Street features</p><p class="hint">Bus and trolleybus. Delay added before the stop, by street feature. The zone columns compare like with like, because busy streets have bus lanes, lights and malls all at once. Grey = under 300 arrivals. Associations, not proof of cause.</p><div class="tw"><table id="infrastructure"></table></div></div><div class="subgrid"><div class="sub"><p class="kpi-sub">Transfer hubs</p><p class="hint">Delay added on the stretch after a stop, by how many lines serve the stop and whether it has a metro or HÉV connection. More passengers getting on and off take more time.</p><div class="tw"><table id="busyStops"></table></div></div><div class="sub"><p class="kpi-sub">Stops per kilometre</p><p class="hint">Lines grouped by how many stops they have per kilometre, with the delay added per kilometre. Bus and trolleybus.</p><div class="tw"><table id="stopDensity"></table></div></div></div></section>
-  <section class="wide" data-about="weather"><h2>Weather and light</h2><p class="hint">Rain compared fairly, with dry hours of the same vehicle type, day type and hour; then weather, temperature and daylight in general.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">How much does rain really add?</p><p class="hint">Rainy hours against dry hours of the same vehicle type, day type and hour, so a rainy Monday morning is compared with a dry Monday morning, not with a quiet Sunday.</p><div class="tw"><table id="rainType"></table></div></div><div class="sub"><p class="kpi-sub">By weather</p><p class="hint" id="h-weather"></p><div class="tw"><table id="weather"></table></div></div><div class="sub"><p class="kpi-sub">By temperature</p><p class="hint">Air temperature in that hour. Most useful in winter, when frosty mornings appear.</p><div class="tw"><table id="temperature"></table></div></div><div class="sub"><p class="kpi-sub">Daylight and darkness</p><p class="hint">Delay added between stops in daylight and in the dark, bus and trolleybus. It mostly reflects the time of day (less traffic at night), not darkness itself.</p><div class="tw"><table id="light"></table></div></div></div></section>
-  <section class="wide" data-about="start"><h2>Why do trips start late?</h2><p class="hint">Delay at the start of a trip: which lines start late, how much of a line's delay comes from the start, and how the previous trip and the break at the terminal pass delay on.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Late from the start, or late on the way?</p><p class="hint">For the most delayed lines: how late trips are at the second stop (the start), how much delay they add along the route, and how late they are at the last stop.</p><div class="tw"><table id="sources"></table></div></div><div class="sub"><p class="kpi-sub">Lines that already start late</p><p class="hint">Delay at the second stop of each trip (the first stop always shows the timetable until the vehicle leaves). A late start points to the terminal or the previous trip, not to traffic.</p><div class="tw"><table id="lateStarts"></table></div></div><div class="sub"><p class="kpi-sub">A late trip makes the next one late</p><p class="hint">How late a trip starts, by how late the same vehicle finished its previous trip.</p><div class="tw"><table id="carry"></table></div></div><div class="sub"><p class="kpi-sub">Does a longer break at the terminal help?</p><p class="hint">Rows: the planned break between the vehicle's previous trip and this one. Columns: how late the previous trip ended. Each cell shows how late this trip starts, in minutes: a long break should absorb a late arrival. Grey = under 50 trips.</p><div class="tw"><table id="turnaround"></table></div></div></div></section>
-  <section class="wide" data-about="regular"><h2>Running early and bunching</h2><p class="hint">Two ways a service becomes irregular even when it is not late: vehicles leaving too early, and vehicles of the same line arriving together.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Lines that often run too early</p><p class="hint">Arrivals more than 1 minute before the timetable. An early bus can be worse than a late one: passengers miss it. Last stops are left out.</p><div class="tw"><table id="early"></table></div></div><div class="sub"><p class="kpi-sub">Lines that run in bunches</p><p class="hint">Share of arrivals that came less than half the planned gap after the previous vehicle of the same line: two buses together, then a long wait.</p><div class="tw"><table id="bunching"></table></div></div></div></section>
+  <section class="wide" data-about="street"><h2>What effect do the surroundings of the stops have?</h2><p class="hint">Bus lanes, bridges, shopping centres, traffic lights, transfer hubs and stop spacing.</p><div class="sub"><p class="kpi-sub">Bus lanes, bridges, shopping centres and traffic lights</p><p class="hint">Delay added before the stop. Compare within a zone; grey = under 300 arrivals.</p><div class="tw"><table id="infrastructure"></table></div></div><div class="subgrid"><div class="sub"><p class="kpi-sub">Transfer hubs</p><p class="hint">Delay added after leaving the stop.</p><div class="tw"><table id="busyStops"></table></div></div><div class="sub"><p class="kpi-sub">Stop spacing</p><p class="hint">Lines grouped by stops per kilometre.</p><div class="tw"><table id="stopDensity"></table></div></div></div></section>
+  <section class="wide" data-about="weather"><h2>How much do weather, cold and darkness matter?</h2><p class="hint">Rain and snow compared fairly, then weather, temperature and daylight.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Rain and snow, compared fairly</p><p class="hint">Against dry hours of the same vehicle type, day type and hour.</p><div class="tw"><table id="rainType"></table></div></div><div class="sub"><p class="kpi-sub">By weather</p><p class="hint" id="h-weather"></p><div class="tw"><table id="weather"></table></div></div><div class="sub"><p class="kpi-sub">By temperature</p><p class="hint">Air temperature in that hour, frost included.</p><div class="tw"><table id="temperature"></table></div></div><div class="sub"><p class="kpi-sub">Daylight and darkness</p><p class="hint">Delay added between stops; mostly reflects the time of day.</p><div class="tw"><table id="light"></table></div></div></div></section>
+  <section class="wide" data-about="start"><h2>Why do trips start late?</h2><p class="hint">Late starts at the terminal, delay passed on from the previous trip, and the planned break.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Late from the start, or late on the way?</p><p class="hint">For the most delayed lines.</p><div class="tw"><table id="sources"></table></div></div><div class="sub"><p class="kpi-sub">Lines that already start late</p><p class="hint">Delay at the second stop of each trip.</p><div class="tw"><table id="lateStarts"></table></div></div><div class="sub"><p class="kpi-sub">Does a late trip make the next one late?</p><p class="hint">Start delay by how late the vehicle ended its previous trip.</p><div class="tw"><table id="carry"></table></div></div><div class="sub"><p class="kpi-sub">Does a longer break at the terminal help?</p><p class="hint">Start delay by planned break (rows) and previous lateness (columns); grey = under 50 trips.</p><div class="tw"><table id="turnaround"></table></div></div></div></section>
+  <section class="wide" data-about="regular"><h2>Do vehicles run too early or in bunches?</h2><p class="hint">Two ways a service becomes irregular even when it is not late.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Lines that often run too early</p><p class="hint">More than 1 minute early; last stops left out.</p><div class="tw"><table id="early"></table></div></div><div class="sub"><p class="kpi-sub">Lines that run in bunches</p><p class="hint">Less than half the planned gap after the previous vehicle.</p><div class="tw"><table id="bunching"></table></div></div></div></section>
 </main>
 <h3 class="group">4 · Comparisons over time</h3>
 <p class="group-intro">This week against last week, and special days and the school break against normal days.</p>
 <main>
-  <section class="wide" data-about="weeks"><h2>This week against last week</h2><p class="hint">The last 7 days against the 7 days before, for the whole network and for the lines that changed most.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Whole network</p><div class="tw"><table id="wowTotal"></table></div></div><div class="sub"><p class="kpi-sub">Lines that got better or worse</p><p class="hint">Average delay this week against last week, lines with at least 500 arrivals in both weeks. Plus = worse, minus = better.</p><div class="tw"><table id="wow"></table></div></div></div></section>
-  <section class="wide" data-about="special"><h2>Special days</h2><p class="hint">Days marked in our calendar, the school break, and the cemetery lines around All Saints' Day, each against normal days of the same type.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Special days against normal days</p><p class="hint">Days marked in our calendar, such as All Saints' Day, against normal days of the same type.</p><div class="tw"><table id="special"></table></div></div><div class="sub"><p class="kpi-sub">School break against school days</p><p class="hint">Normal workdays during and outside the school break (the autumn break ended on 1 November, the winter break starts on 19 December).</p><div class="tw"><table id="school"></table></div></div></div><div class="sub"><p class="kpi-sub">Cemetery lines around All Saints' Day</p><p class="hint">Lines stopping at a cemetery. 1 November (a holiday) is compared with other holidays, 2 November (a workday) with other workdays; “Extra” is the difference.</p><div class="tw"><table id="cemetery"></table></div></div></section>
+  <section class="wide" data-about="weeks"><h2>Is it getting better or worse?</h2><p class="hint">The last 7 days against the 7 days before.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Whole network</p><div class="tw"><table id="wowTotal"></table></div></div><div class="sub"><p class="kpi-sub">Lines that got better or worse</p><p class="hint">Plus = worse this week; at least 500 arrivals in both weeks.</p><div class="tw"><table id="wow"></table></div></div></div></section>
+  <section class="wide" data-about="special"><h2>How do special days differ?</h2><p class="hint">Holidays, the school break and the cemetery lines against normal days.</p><div class="subgrid"><div class="sub"><p class="kpi-sub">Special days against normal days</p><p class="hint">Against normal days of the same type.</p><div class="tw"><table id="special"></table></div></div><div class="sub"><p class="kpi-sub">School break against school days</p><p class="hint">Normal workdays only.</p><div class="tw"><table id="school"></table></div></div></div><div class="sub"><p class="kpi-sub">Cemetery lines around All Saints’ Day</p><p class="hint">1 Nov against other holidays, 2 Nov against other workdays.</p><div class="tw"><table id="cemetery"></table></div></div></section>
 </main>
 <h3 class="group">5 · Explore</h3>
 <p class="group-intro">Pick a line and follow it stop by stop, or look at the map.</p>
 <main>
-  <section class="wide" id="lineWrap" data-about="line"><h2>Follow one line, stop by stop</h2><p class="hint">Pick a line and a direction: the average delay at each stop and the delay added since the previous stop, for the line's most common route. The first stop has no value, because it always shows the timetable.</p>
+  <section class="wide" id="lineWrap" data-about="line"><h2>How does delay build up along one line?</h2><p class="hint">Pick a line and a direction to see its delay stop by stop.</p>
     <div class="controls"><select id="lineSelect" aria-label="Line"><option>Loading…</option></select><span id="dirButtons"></span><span class="hint" id="lineInfo" style="margin:0"></span></div>
     <canvas id="lineChart"></canvas><table id="lineTable"></table></section>
-  <section class="wide" id="mapWrap" data-about="map"><h2>Map: where delay is added</h2><p class="hint">Each coloured stretch connects two stops; its colour is the average delay added on it (see the legend). Hover over a stretch for details. At least 100 arrivals. If it is switched on, “Live road traffic (TomTom)” lays today's car traffic over the map, straight from TomTom and not stored. Map: © OpenStreetMap contributors.</p><div id="map"></div><p class="hint" id="mapInfo"></p></section>
+  <section class="wide" id="mapWrap" data-about="map"><h2>Where in the city does delay build up?</h2><p class="hint">Every stretch coloured by the delay added on it. Switch on live road traffic from TomTom at the top right. Map: © OpenStreetMap contributors.</p><div id="map"></div><p class="hint" id="mapInfo"></p></section>
 </main>
 <h3 class="group">6 · About the data</h3>
 <p class="group-intro">Our project KPIs, how much data was collected, how healthy the processing is, and what was left out as errors.</p>
 <main>
-  <section class="wide" id="kpiWrap" data-about="kpis"><h2>Are we meeting our KPIs?</h2><p class="hint">Nine project KPIs, measured by the pipeline itself. The first four show whether the radar sees enough of the network to answer where and why vehicles run late; the other five whether the pipeline runs well. For daily KPIs, “Latest” is the most recent processed day and sets the status, and “On target” counts every day of this view, so an earlier bad day stays visible. Processing time comes from the Glue job's run history, the cost from the measured run time and the data Athena reads (list prices).</p>
+  <section class="wide" id="kpiWrap" data-about="kpis"><h2>Are we meeting our KPIs?</h2><p class="hint">Nine project KPIs, measured by the pipeline itself.</p>
   <p class="kpi-sub">Does the radar see the network?</p><table id="kpiNet"></table><p class="hint" id="kpiMissing"></p>
   <p class="kpi-sub">Does the pipeline run well?</p><table id="kpiOps"></table></section>
-  <section class="wide" data-about="daily"><h2>Day by day: collection and processing</h2><p class="hint">One row per day: how much of the feed was collected and how the processing job went. Healthy: “Not matched” near 0 %, “Left out as errors” a few percent, no warnings. “Not tracked live” = trips with exactly 0 delay at every stop.</p><div class="tw"><table id="daily"></table></div></section>
-  <section class="wide" data-about="suspects"><h2>Trips left out as data errors</h2><p class="hint">Trips 30+ minutes late at every stop on two or more days. A real incident happens once; these come back day after day, so they are vehicles matched to the wrong trip. They are not used anywhere on this page.</p><div class="tw"><table id="suspects"></table></div></section>
+  <section class="wide" data-about="daily"><h2>How much data did we collect each day?</h2><p class="hint">Collection and processing, one row per day.</p><div class="tw"><table id="daily"></table></div></section>
+  <section class="wide" data-about="suspects"><h2>Which trips are left out as data errors?</h2><p class="hint">Trips that look 30+ minutes late at every stop, day after day.</p><div class="tw"><table id="suspects"></table></div></section>
 
 </main>
 <footer><div id="note"></div><div id="attr"></div><div id="failed" class="err"></div></footer>
@@ -249,144 +251,197 @@ function drawDistricts(d) {
     if (!g) { info.textContent = 'The district map is not uploaded yet (scripts/build_district_reference.py).'; return; }
     dGeo = g; paint(); }).catch(e => { info.textContent = 'Could not load the district map: ' + e; });
 }
-// ---- "What does this show?" box under every panel: three fixed parts and one computed from this view's data
+// ---- "What does this show?" box under every panel: fixed explanations and one part computed from this view's data
 const N = v => v == null || v === '' || isNaN(+v) ? null : +v;
 const F1 = v => N(v) == null ? '–' : (+v).toFixed(1);
 const maxBy = (a, k) => (a || []).filter(r => N(r[k]) != null).reduce((m, r) => (m == null || +r[k] > +m[k] ? r : m), null);
 const minBy = (a, k) => (a || []).filter(r => N(r[k]) != null).reduce((m, r) => (m == null || +r[k] < +m[k] ? r : m), null);
-const strip = s => String(s || '').replace(/^\d+:\s*/, '');
 const TYPE_NAME = t => t === 'rail' ? 'HÉV' : t;
 const DELTA = v => N(v) == null ? '–' : Math.abs(+v) < 0.1 ? 'practically no change' : `${+v > 0 ? '+' : '−'}${Math.abs(+v).toFixed(2)} min`;
 const ABOUT = {
   lines: {
-    shows: 'The lines with the highest average delay over all their stops, with the typical delay, the bad-day delay and the extra time to plan.',
-    read: 'The average is pulled up by a few very late arrivals; the typical delay (median) is what most passengers get. A big gap between typical and bad-day delay means the line is unpredictable. Click a column to sort.',
+    shows: 'The 20 lines with the highest average delay over all their stops, from every measured arrival in this view.',
+    read: 'Read the three delay columns together. The average is pulled up by a few very late arrivals; the typical delay is what most passengers get; the bad-day delay is what you must be ready for. A big gap between typical and bad-day delay means the line is unpredictable, even if its average looks fine. Click a column header to sort.',
+    cols: ['Arrivals: measured stop arrivals behind the row; under 1,000 gets the “few data” tag.', 'Average delay: mean delay at the stops, in minutes.', 'Typical delay: the median; half of the arrivals are better, half are worse.',
+           'Bad-day delay: the 95th percentile; only 1 arrival in 20 is later.', 'Extra time to plan: bad-day minus typical delay; how much earlier to leave to be on time 19 times out of 20.'],
     see: d => { const r = (d.hotspots || [])[0], b = maxBy(d.hotspots, 'buffer_min'); if (!r) return '';
       return `Line ${r.route} is the most delayed: ${F1(r.avg_delay_min)} min on average, ${F1(r.median_min)} min typically and ${F1(r.p95_delay_min)} min on a bad day.` +
         (b ? ` Hardest to plan with among these: line ${b.route}, where you need ${F1(b.buffer_min)} extra minutes to be on time 19 times out of 20.` : ''); },
-    use: 'Shows where passengers lose the most time, line by line, and which lines need the biggest safety margin. It does not say why: see “Why do trips start late?” and “Where along the route is time lost?”.' },
+    conclude: 'Which lines cost passengers the most time, and which need the biggest safety margin when planning a journey.',
+    caveat: 'It does not say why a line is late. For that, see “Why do trips start late?” (problems at the terminal) and “Where along the routes is time lost?” (problems on the way).' },
   time: {
-    shows: 'The average delay for each day, and for each hour of the day, workdays and weekends separately.',
-    read: 'In the hour chart look for the morning and afternoon peaks; in the day chart for single bad days and the weekly rhythm. Days with few hours of data are less certain.',
+    shows: 'Left: the average delay of each day. Right: the average delay for each hour of the day, workdays and weekends or holidays as two lines.',
+    read: 'In the hour chart look for the two humps of the morning and afternoon rush. In the day chart look for single high days (incidents, bad weather) and the weekly rhythm (weekends lower).',
+    cols: ['Day chart: one point per day, all lines together.', 'Hour chart: hour of arrival, Budapest time; purple = workdays, amber = weekends and holidays. Gaps are hours without data.'],
     see: d => { const days = (d.coverage || []).filter(r => N(r.avg_delay_min) != null && (N(r.hours_collected) || 0) >= 12);
       const w = maxBy(days, 'avg_delay_min'), b = minBy(days, 'avg_delay_min'), h = maxBy((d.by_hour || []).filter(r => r.day_kind === 'workday'), 'avg_delay_min');
       return (w ? `Worst day: ${w.dt} (${F1(w.avg_delay_min)} min on average); best: ${b.dt} (${F1(b.avg_delay_min)} min).` : '') +
         (h ? ` On workdays the worst hour starts at ${h.hour_local}:00 (${F1(h.avg_delay_min)} min).` : ''); },
-    use: 'Separates time-of-day effects from one-off events. A single bad day usually has an incident behind it: check “Incidents and BKK disruptions”.' },
+    conclude: 'Whether delay follows the daily rhythm of traffic (a steady pattern) or comes from one-off events (single spikes).',
+    caveat: 'Days with few hours of data are less certain, because the hours that were collected may not be typical. A spike needs an explanation: check “When did something go badly wrong?”.' },
   when: {
-    shows: 'Punctuality in rush hour against the other hours and the weekend, and for each day of the week.',
-    read: 'Compare the on-time shares. Weekdays that occur fewer times in the data (“Days”) are less certain.',
+    shows: 'Punctuality in workday rush hour against the other workday hours, Saturdays and Sundays or holidays; and the same for each day of the week.',
+    read: 'Compare the on-time shares: the further apart rush hour and Sunday are, the more delay comes from traffic and crowds rather than from the timetable itself.',
+    cols: ['When / Day of the week: the time group.', 'Days: how many of that weekday are in the data; fewer days, less certain.', 'Average delay: in minutes.',
+           'On time: share of arrivals from 1 minute early to 3 minutes late.', 'Rush hour on time: the same, only for 7–9 and 16–18 on workdays.'],
     see: d => { const pk = (d.peak || []).find(r => /peak \(/.test(r.period)), su = (d.peak || []).find(r => /sunday/.test(r.period)), w = maxBy(d.weekdays, 'avg_delay_min');
       return (pk && su ? `In rush hour ${F1(pk.on_time_pct)} % of arrivals are on time, on Sundays and holidays ${F1(su.on_time_pct)} %.` : '') +
         (w ? ` Worst weekday: ${w.day_of_week} (${F1(w.avg_delay_min)} min on average).` : ''); },
-    use: 'Rush hour is the strongest single factor in the data. That points to road traffic and passenger numbers, not to individual lines.' },
+    conclude: 'Rush hour is the strongest single factor in the data. That points to road traffic and passenger numbers, not to individual lines.',
+    caveat: 'Holidays and special days are left out of the weekday table; a weekday that had an incident can look worse than it usually is.' },
   vehicles: {
-    shows: 'On-time share, share over 5 minutes late, average and bad-day delay for buses, trams, trolleybuses and HÉV.',
-    read: 'Compare the types that share the road with cars (bus, trolleybus) with those on their own track (tram, HÉV).',
+    shows: 'Punctuality and delay for each vehicle type: bus, trolleybus, tram and HÉV, and all of them together.',
+    read: 'Compare the types that share the road with cars (bus, trolleybus) with those that run on their own track (tram, HÉV).',
+    cols: ['Arrivals: measured stop arrivals.', 'On time: from 1 minute early to 3 minutes late.', 'Over 5 min late: share of arrivals more than 5 minutes late.', 'Average delay and bad-day delay: in minutes.'],
     see: d => { const t = (d.punctuality || []).filter(r => r.type !== 'all'), b = maxBy(t, 'on_time_pct'), w = minBy(t, 'on_time_pct');
       return b && w ? `Most punctual: ${TYPE_NAME(b.type)} (${F1(b.on_time_pct)} % on time); least punctual: ${TYPE_NAME(w.type)} (${F1(w.on_time_pct)} %).` : ''; },
-    use: 'A separate track is the clearest protection against delay. The metro is not in BKK’s real-time data, so it is missing here.' },
+    conclude: 'A separate track is the clearest protection against delay; trams and HÉV are hit far less by traffic.',
+    caveat: 'The metro is not in BKK’s real-time data, so it is missing. Trams also differ from buses in the lines they serve, not only in the track.' },
   incidents: {
-    shows: 'Hours when a line’s typical delay reached 10 minutes, and the delay while a BKK disruption notice was out.',
-    read: 'Top: each row is one line in one hour, with the notice BKK published at the time. Bottom: delay and punctuality by type of notice; “none” means no notice.',
+    shows: 'Top: every hour when a line’s typical delay reached 10 minutes. Bottom: delay and punctuality grouped by the BKK disruption notice that was out at the time.',
+    read: 'In the top table each row is one line in one hour; several lines in the same area and hour point to one incident (an accident, a closure, a jam). In the bottom table compare each notice type with “none”.',
+    cols: ['Date and hour: when it happened, Budapest time.', 'Typical delay and bad-day delay: in that hour, in minutes.', 'BKK notice: what BKK announced at the time (traffic, works, detour, no service …).',
+           'Bottom table: the notice type, arrivals, average delay and the share on time while it was out.'],
     see: d => { const u = d.unusual_hours || [], w = maxBy(u, 'median_min'), dis = d.disruptions || [];
       const tr = dis.find(r => r.category === 'traffic'), no = dis.find(r => r.category === 'none');
       return (u.length ? `${u.length} line-hours with a typical delay of 10+ minutes; the worst: line ${w.route} on ${w.service_date} at ${w.hour_local}:00 (${F1(w.median_min)} min).` : 'No line-hour with a typical delay of 10+ minutes.') +
         (tr && no ? ` With a BKK traffic notice ${F1(tr.on_time_pct)} % of arrivals are on time, without any notice ${F1(no.on_time_pct)} %.` : ''); },
-    use: 'Finds incidents automatically and checks them against BKK’s own notices. Notices are recorded from 2 November.' },
+    conclude: 'Incidents are found automatically and checked against BKK’s own notices; real incidents with a BKK traffic or accident notice are never removed as data errors.',
+    caveat: 'Notices are recorded from 2 November. An hour without a notice can still be a real incident that BKK did not announce.' },
   districts: {
-    shows: 'A reliability index from 1 to 10 for each district, from five measures, and the delay by distance from the centre.',
-    read: '10 is the best district and 1 the worst, compared with each other, not with a fixed standard. Look at the measures behind the score, because the weights are our choice.',
+    shows: 'A reliability index from 1 to 10 for each of Budapest’s 23 districts, from all arrivals at the district’s stops; and the delay by distance from the centre.',
+    read: 'Each of five measures is scaled from 1 (the worst district) to 10 (the best) and weighted. The index compares districts with each other, not with a fixed standard. Check the measures next to the score.',
+    cols: ['Index: the weighted score, 1–10.', 'On time, typical delay, extra time to plan: as in the line table.', 'Arrived in a bunch: share of arrivals right behind another vehicle of the line.',
+           'Added per km: delay added per kilometre between the district’s stops.', 'Zones: city centre under 3 km from Deák Ferenc tér, middle ring 3–8 km, outskirts over 8 km.'],
     see: d => { const r = (d.districts || []).slice().sort((a, b) => a.rank - b.rank); if (!r.length) return '';
       const z = d.by_zone || [], zi = z.find(x => x.zone === 'inner'), zo = z.find(x => x.zone === 'outer');
       return `Most reliable: ${r[0].district} (index ${r[0].index}); least reliable: ${r[r.length - 1].district} (${r[r.length - 1].index}).` +
         (zi && zo ? ` City centre ${F1(zi.on_time_pct)} % on time, outskirts ${F1(zo.on_time_pct)} %.` : ''); },
-    use: 'Gives a district view for residents and planners. It does not separate the district from the lines that cross it: a district can score low because of one bad line.' },
+    conclude: 'Which parts of the city are served least reliably, as seen at their own stops.',
+    caveat: 'The weights are our choice (shown under the table). A district can score low because of one bad line that crosses it, and districts with fewer than 5,000 arrivals are left out.' },
   route: {
-    shows: 'The stretches between two stops that add the most delay, and the stops where vehicles are latest on average.',
-    read: '“Delay added” shows where time is lost. The average delay at a stop also contains everything that happened before it, so a stop can be late because of earlier stretches.',
-    see: d => { const s = (d.segments || [])[0];
-      return s ? `The stretch that adds the most: ${s.segment} on line ${s.route}, ${F1(s.avg_gain_s)} s per trip on average.` : ''; },
-    use: 'Points to concrete places for a bus lane, signal priority or a stop change. The map shows the same measure for every stretch.' },
+    shows: 'Left: the stretches between two stops that add the most delay. Right: the stops where vehicles are latest on average.',
+    read: 'Start with the left table: “delay added” shows exactly where time is lost. The right table shows where passengers feel it, which is often further along the route.',
+    cols: ['Stretch: from stop → to stop, for one line.', 'Delay added: how much later the vehicle is at the second stop than at the first, on average, in seconds.', 'Average delay at a stop: in minutes, including everything before it.'],
+    see: d => { const s = (d.segments || [])[0], w = (d.worst_stops || [])[0];
+      return (s ? `The stretch that adds the most: ${s.segment} on line ${s.route}, ${F1(s.avg_gain_s)} s per trip on average.` : '') +
+        (w ? ` Latest stop: ${w.stop} on line ${w.route} (${F1(w.avg_delay_min)} min).` : ''); },
+    conclude: 'Concrete places where a bus lane, signal priority or a changed stop would save the most time.',
+    caveat: 'The first and last stretch of a trip are left out, because vehicles wait there. A stretch needs at least 100 arrivals.' },
   speed: {
-    shows: 'Bus and trolleybus speed measured from vehicle positions: rush hour against night, and the slowest stretches.',
-    read: 'Night speed is the free-flow baseline; the percentage is how much slower the same stretch is in rush hour.',
+    shows: 'Bus and trolleybus speed measured from BKK vehicle positions: rush hour against night on the same stretch, and the slowest stretches overall.',
+    read: 'Night speed is the free-flow baseline. The percentage tells how much of the speed rush hour takes away; a stretch that is slow even at night has a layout or stop problem, not a traffic problem.',
+    cols: ['At night / Rush hour: average speed in km/h.', 'Slower in rush hour: how much lower the rush-hour speed is, in percent.', 'Readings: how many speed measurements are behind the row.'],
     see: d => { const b = (d.congestion_total || []).find(r => r.type === 'bus'), c = (d.congestion || [])[0];
       return (b ? `Buses run ${F1(b.slowdown_pct)} % slower in rush hour than at night (${F1(b.peak_kmh)} against ${F1(b.night_kmh)} km/h).` : '') +
         (c ? ` The stretch that slows down most: ${c.segment} (line ${c.line}), ${F1(c.slowdown_pct)} % slower.` : ''); },
-    use: 'Separates traffic from other causes: a stretch that is slow even at night has a layout or stop problem, not a traffic problem.' },
+    conclude: 'This is our own measure of road congestion: it separates traffic from other causes without any traffic data provider.',
+    caveat: 'Night lines (9xx) are left out, because they wait at the night hubs by timetable; stretches need at least 10 readings in both rush hour and night.' },
   street: {
-    shows: 'Delay added near stops with or without a bus lane, a Danube bridge, a shopping centre or traffic lights; at transfer hubs; and on lines with many stops.',
-    read: 'Compare per km within the same zone: busy streets have bus lanes, lights and malls at once, so the all-city column mixes them.',
+    shows: 'The delay added near stops with or without a bus lane, a Danube bridge, a shopping centre or traffic lights; at transfer hubs of different sizes; and on lines with dense or sparse stops.',
+    read: 'Compare per kilometre and within the same zone. Busy streets have bus lanes, lights and shopping centres all at once, so the all-city column mixes them; the zone columns compare like with like.',
+    cols: ['Street feature / Present?: the feature and whether the stop has it (for lights: how many within 300 m).', 'Added between stops / per km: delay added before the stop, per stretch and per kilometre, in seconds.',
+           'Per km by zone: the same within the city centre, the middle ring and the outskirts; grey = under 300 arrivals.', 'Transfer hubs: delay added on the stretch after the stop, by how many lines serve it and whether it has a metro or HÉV connection.',
+           'Stop spacing: lines grouped by stops per kilometre.'],
     see: d => { const g = (f, grp, z) => ((d.infrastructure || []).find(r => r.factor === f && r.grp === grp && r.zone === z) || {}).gain_per_km_s;
       const by = g('bus lane at the stop', 'yes', 'inner'), bn = g('bus lane at the stop', 'no', 'inner');
       const l3 = g('traffic lights within 300 m', '3-5', 'all'), l0 = g('traffic lights within 300 m', '0', 'all');
       return (N(by) != null && N(bn) != null ? `In the city centre stops with a bus lane add ${F1(by)} s per km, without one ${F1(bn)} s.` : '') +
         (N(l3) != null && N(l0) != null ? ` With 3–5 traffic lights near the stop ${F1(l3)} s per km is added, with none ${F1(l0)} s.` : ''); },
-    use: 'Supports targeted measures such as bus lanes in the centre and signal priority. These are associations: bus lanes are built on the busiest roads.' },
+    conclude: 'Which features of a stop’s surroundings go with lost time, as a basis for bus lanes, signal priority or merging stops.',
+    caveat: 'These are associations, not proof of cause: bus lanes and lights are built where traffic is heaviest. Bus and trolleybus only.' },
   weather: {
-    shows: 'The delay in rain, compared fairly with dry hours of the same vehicle type, day type and hour; and the delay by weather, temperature and daylight.',
-    read: 'Draw conclusions from the rain table. The other three mix weather with the time of day and the season.',
+    shows: 'Rain and snow compared fairly with dry hours; then the delay by weather type, by temperature (including frost) and in daylight or darkness.',
+    read: 'Draw conclusions from the first table: it compares each rainy or snowy hour with dry hours of the same vehicle type, day type and hour of the day. The other tables mix weather with the time of day and the season.',
+    cols: ['Rainy / snowy arrivals: arrivals in rain or snowfall.', 'Extra in rain / snow: how much later than in dry hours of the same kind, in minutes.',
+           'By weather: snowing, icy (rain at or below 0 °C), snow on the ground, fog, rain, strong wind or dry.', 'By temperature: air temperature in that hour.', 'Daylight and darkness: delay added between stops, bus and trolleybus.'],
     see: d => { const r = d.rain_by_type || [], b = r.find(x => x.type === 'bus'), t = r.find(x => x.type === 'tram');
-      return b && t ? `In rain, compared with dry hours: buses ${DELTA(b.extra_min)}, trams ${DELTA(t.extra_min)}.` : ''; },
-    use: 'Shows that weather matters much less than rush hour, and only for vehicles that share the road.' },
+      const snow = r.filter(x => N(x.snow_extra_min) != null && (N(x.snow_observations) || 0) > 0), sb = snow.find(x => x.type === 'bus');
+      const fr = (d.temperature || []).filter(x => /below|−5 to 0/.test(x.temperature)), warm = (d.temperature || []).find(x => /10 °C or more/.test(x.temperature));
+      const frN = fr.reduce((s, x) => s + (+x.observations || 0), 0);
+      return (b && t ? `In rain, compared with dry hours: buses ${DELTA(b.rain_extra_min)}, trams ${DELTA(t.rain_extra_min)}.` : '') +
+        (sb ? ` In snow: buses ${DELTA(sb.snow_extra_min)}.` : ' No snowfall in this view yet.') +
+        (frN ? ` ${frN.toLocaleString('en-US')} arrivals were measured below 0 °C.` : ''); },
+    conclude: 'How much bad weather really adds once the time of day is taken out, and for which vehicles.',
+    caveat: 'Snow and frost are rare in the data so far, so their figures will change a lot as winter arrives. Darkness mostly reflects the time of day, not darkness itself.' },
   start: {
-    shows: 'How late trips are at the start, which lines start late, and how the previous trip and the planned break pass delay on.',
-    read: 'Start delay is measured at the second stop. If the previous trip ended late and the break at the terminal was short, the next trip starts late too.',
+    shows: 'Where a line’s delay comes from (the start or the way), which lines start late, how a late previous trip passes delay on, and whether a longer break at the terminal absorbs it.',
+    read: 'Start delay is measured at the second stop. If “late at the start” is large compared with “added on the way”, the problem is at the terminal, not in traffic.',
+    cols: ['Late at the start / Added on the way / Late at the end: minutes, for the most delayed lines.', 'Started 3+ min late: share of a line’s trips that leave more than 3 minutes late.',
+           'Previous trip ended … late: how late the same vehicle finished its previous trip.', 'Planned break: the scheduled time between the previous trip and this one; each cell is how late this trip starts (grey = under 50 trips).'],
     see: d => { const c = d.carry_over || [], hi = c.find(r => /over 10/.test(r.previous_trip_late)), lo = c.find(r => /under 2/.test(r.previous_trip_late)), ls = maxBy(d.late_starts, 'late_start_pct');
       return (hi && lo ? `After a previous trip that ended over 10 minutes late, the next one starts ${F1(hi.avg_start_delay_min)} min late, after a punctual one ${F1(lo.avg_start_delay_min)} min.` : '') +
         (ls ? ` Line ${ls.route}: ${F1(ls.late_start_pct)} % of trips start 3+ minutes late.` : ''); },
-    use: 'Points to scheduling (turnaround time, vehicle allocation) rather than traffic: these delays can be fixed at the terminal.' },
+    conclude: 'Delay that can be fixed at the terminal, by longer breaks or more vehicles, rather than on the street.',
+    caveat: 'A vehicle can run trips of different lines; the previous trip is the same vehicle’s previous trip in the timetable.' },
   regular: {
     shows: 'Lines that often leave stops too early, and lines whose vehicles arrive together.',
-    read: 'Early = more than 1 minute before the timetable. Bunched = less than half the planned gap after the previous vehicle of the same line.',
+    read: 'An early bus is worse than a late one for the passenger who misses it; a bunch means a long gap behind it. Both make a line irregular even when its average delay is low.',
+    cols: ['Early arrivals: share of arrivals more than 1 minute before the timetable.', 'How early: average, in minutes, when early.', 'Arrived in a bunch: share of arrivals less than half the planned gap after the previous vehicle of the line.'],
     see: d => { const e = (d.early || [])[0], b = (d.bunching || [])[0];
       return (e ? `Most often early: line ${e.route} (${F1(e.early_pct)} % of arrivals).` : '') + (b ? ` Most bunched: line ${b.route} (${F1(b.bunched_pct)} %).` : ''); },
-    use: 'An irregular service hurts passengers even when the average delay is low: they miss the early bus or wait long after a bunch.' },
+    conclude: 'Lines whose timetable or driving should be adjusted even if they are not on the “most late” list.',
+    caveat: 'Last stops are left out of “early”, because vehicles may arrive there early on purpose.' },
   weeks: {
-    shows: 'The last 7 days against the 7 days before, for the network and line by line.',
-    read: 'Plus means worse this week. Lines need at least 500 arrivals in both weeks.',
+    shows: 'The last 7 days against the 7 days before: for the whole network, and the lines that changed the most.',
+    read: 'Plus means worse this week, minus means better. Look for lines with a big change and check them in the line explorer.',
+    cols: ['Week, Days, Arrivals, Average delay, On time: for the whole network.', 'Last week / This week / Change: average delay per line in minutes; lines need at least 500 arrivals in both weeks.'],
     see: d => { const t = d.week_over_week_total || [], a = t.find(r => r.week === 'this week'), p = t.find(r => r.week === 'previous week'), w = maxBy(d.week_over_week, 'change_min');
       return (a && p ? `This week ${F1(a.avg_delay_min)} min on average (${F1(a.on_time_pct)} % on time), the week before ${F1(p.avg_delay_min)} min (${F1(p.on_time_pct)} %).` : '') +
         (w && +w.change_min > 0 ? ` Line ${w.route} worsened the most: ${F1(w.change_min)} min more on average.` : ''); },
-    use: 'Spots new problems such as roadworks or timetable changes quickly. One week can be bent by a single incident.' },
+    conclude: 'New problems such as roadworks, detours or timetable changes show up here first.',
+    caveat: 'A single incident or a day with little data can bend a whole week.' },
   special: {
-    shows: 'Special days, the school break and the cemetery lines around All Saints’ Day, each against normal days of the same type.',
-    read: 'Each comparison uses the same kind of day, so a holiday is compared with other holidays and a workday with other workdays.',
+    shows: 'Special days in our calendar, the school break and the cemetery lines around All Saints’ Day, each against normal days of the same type.',
+    read: 'Each comparison uses the same kind of day: a holiday is compared with other holidays, a workday with other workdays.',
+    cols: ['Day, Day type, Days, Average delay, On time: for each special day.', 'School break: normal workdays during and outside the break, with morning-rush punctuality.',
+           'Cemetery lines: 1 November against other holidays and 2 November against other workdays; Extra = the difference in minutes.'],
     see: d => { const s = d.school_break || [], br = s.find(r => r.period === 'school break'), sd = s.find(r => r.period === 'school days'), c = maxBy(d.cemetery_lines, 'holiday_extra_min');
       return (br && sd ? `In the school break ${F1(br.morning_peak_on_time_pct)} % of morning-rush arrivals were on time, on school days ${F1(sd.morning_peak_on_time_pct)} %.` : '') +
         (c ? ` On 1 November line ${c.route} ran ${F1(c.holiday_extra_min)} min later than on other holidays.` : ''); },
-    use: 'Shows how much of the rush-hour delay is school traffic. The samples are small: two break days and one All Saints’ Day.' },
+    conclude: 'How much of the rush-hour delay is school traffic, and how events change the network.',
+    caveat: 'The samples are small: two break days and one All Saints’ Day so far. The winter break starts on 19 December.' },
   line: {
-    shows: 'One line’s average delay at every stop and the delay added since the previous stop, for its most common route.',
-    read: 'Pick a line and a direction. Where the delay jumps, time is lost; where it stays flat, the line keeps its delay.',
+    shows: 'One line’s average delay at every stop, and the delay added since the previous stop, for its most common route.',
+    read: 'Pick a line and a direction. Where the bars jump, time is lost; where they stay flat, the line keeps its delay; where they fall, it makes up time.',
+    cols: ['Stop: in timetable order; neighbouring platforms of the same name are merged.', 'Average delay: in minutes at that stop.', 'Added since the previous stop: in seconds.'],
     see: null,
-    use: 'Use it to check stop by stop a line you found in another panel.' },
+    conclude: 'Exactly where along a line a problem found in another panel happens.',
+    caveat: 'The first stop has no value, because it always shows the timetable until the vehicle leaves.' },
   map: {
     shows: 'Every stretch between two stops, coloured by the average delay added on it.',
-    read: 'Green makes up time, red loses it; hover for details. The TomTom switch lays today’s car traffic over it, live and not stored.',
+    read: 'Dark green makes up time; red loses a lot. Hover over a stretch for the stops, the lines and the number of arrivals. The TomTom switch lays today’s car traffic over the map and fades our colours.',
+    cols: ['Colours: makes up time, 0–30 s, 30–60 s, 1–2 min and over 2 min added per trip.', 'Live road traffic (TomTom): car traffic right now, green flows freely, red is slow; shown live, never stored.'],
     see: null,
-    use: 'Shows at a glance where in the city delay builds up. Stretches with fewer than 100 arrivals are not drawn.' },
+    conclude: 'Where in the city delay builds up, at a glance, and whether it coincides with car congestion today.',
+    caveat: 'Stretches with fewer than 100 arrivals are not drawn. The TomTom layer shows the moment you look, not the period of the data.' },
   kpis: {
     shows: 'Our nine project KPIs: whether the radar sees enough of the network, and whether the pipeline runs well.',
-    read: '“Latest” is the most recent processed day and sets the status; “On target” counts every day of this view.',
+    read: 'Each row has a target, the latest value and a status. For daily KPIs “On target” counts every day of this view, so an earlier bad day stays visible.',
+    cols: ['KPI and Target: what we measure and the level we aim for.', 'Latest: the most recent processed day (or this view for coverage KPIs).', 'On target: on how many days or runs the target was met.', 'Status: met or not met, from the latest value.'],
     see: d => { const k = (d.kpis || []).filter(r => r.status != null); if (!k.length) return '';
       const bad = k.filter(r => r.status === false).map(r => r.kpi);
       return `${k.length - bad.length} of ${k.length} KPIs are met` + (bad.length ? `; not met: ${bad.join(', ')}.` : '.'); },
-    use: 'Shows whether the numbers on this page can be trusted, and is honest about bad days.' },
+    conclude: 'Whether the numbers on this page can be trusted today.',
+    caveat: 'Processing time and cost come from the Glue run history and list prices; they leave out storage and the small Lambda costs.' },
   daily: {
     shows: 'One row per day: how much of the feed was collected and how the processing job went.',
-    read: 'Healthy: “Not matched” near 0 %, “Left out as errors” a few percent, no warnings.',
+    read: 'Healthy days have about 24 hours of data, “Not matched” near 0 %, “Left out as errors” a few percent and no warnings.',
+    cols: ['Hours of data: 5-minute snapshots of the feed, in hours.', 'Arrivals / Clean rows: measured arrivals and the rows of the clean table.', 'Not matched: real-time records without a timetable trip.',
+           'Left out as errors: stale predictions and shifted trips.', 'Not tracked live: trips with exactly 0 delay at every stop.', 'BKK notices, Vehicles matched, Job version, Warnings: from the processing job.'],
     see: d => { const c = (d.coverage || []).filter(r => N(r.hours_collected) != null); if (!c.length) return '';
       const ok = c.filter(r => +r.hours_collected >= 20).length;
       return `${ok} of ${c.length} days had at least 20 hours of data.`; },
-    use: 'Explains odd days in the other panels: a day with few hours of data is less certain.' },
+    conclude: 'Explains odd days in the other panels: a day with few hours of data is less certain.',
+    caveat: 'Hours include the snapshots copied from teammates’ labs where ours was asleep.' },
   suspects: {
-    shows: 'Trips 30+ minutes late at every stop on two or more days, without a BKK traffic or accident notice.',
-    read: 'A real incident happens once; these come back day after day, so they are vehicles matched to the wrong trip.',
+    shows: 'Trips 30+ minutes late at every stop on two or more days, without a BKK traffic or accident notice on those days.',
+    read: 'A real incident happens once; these come back day after day with the same trip, so they are vehicles matched to the wrong trip in the feed.',
+    cols: ['Line and Trip ID: the trip in the BKK timetable.', 'Days: on how many days it looked this way.', 'Late at every stop by at least: the smallest delay of the trip, averaged over those days.'],
     see: d => { const s = d.suspect_trips || []; if (!s.length) return 'No trip is left out.';
       return `${s.length} trips on ${new Set(s.map(r => r.route)).size} lines are left out of every figure on this page.`; },
-    use: 'Keeps a few wrong records from distorting the rankings. Trips with a BKK traffic or accident notice are never left out.' },
+    conclude: 'A few wrong records would otherwise put lines at the top of the rankings where they do not belong.',
+    caveat: 'Days with a BKK traffic or accident notice never count, so real incidents stay in the figures.' },
 };
 function renderAbout(d) {
   document.querySelectorAll('section[data-about]').forEach(sec => {
@@ -395,8 +450,10 @@ function renderAbout(d) {
     if (!box) {
       box = document.createElement('details'); box.className = 'about';
       box.innerHTML = '<summary>What does this show?</summary><dl>' +
-        `<dt>Shows</dt><dd>${a.shows}</dd><dt>How to read</dt><dd>${a.read}</dd>` +
-        (a.see ? '<dt>What we see</dt><dd class="see"></dd>' : '') + `<dt>Use and limits</dt><dd>${a.use}</dd></dl>`;
+        `<dt>Shows</dt><dd>${a.shows}</dd><dt>How to read it</dt><dd>${a.read}</dd>` +
+        `<dt>Columns</dt><dd><ul>${a.cols.map(c => `<li>${c}</li>`).join('')}</ul></dd>` +
+        (a.see ? '<dt>What we see now</dt><dd class="see"></dd>' : '') +
+        `<dt>What it tells us</dt><dd>${a.conclude}</dd><dt>Watch out</dt><dd>${a.caveat}</dd></dl>`;
       const h = sec.querySelector(':scope > p.hint'); (h || sec.querySelector(':scope > h2')).after(box);
     }
     if (a.see) {
@@ -448,7 +505,7 @@ function render(d) {
       `Lines and comparisons based on few arrivals can still change a lot.`;
   }
 
-  document.getElementById('h-hot').textContent = `Average delay of each line over all its stops (${d.view || 'last ' + d.window_days + ' days'}). Lines with over 200 arrivals; “few data” = under 1,000 arrivals, so less certain. Click a column to sort, for example by extra time to plan to see the lines that are hardest to plan with.`;
+  document.getElementById('h-hot').textContent = `Average, typical and bad-day delay per line (${d.view || 'last ' + d.window_days + ' days'}). Click a column to sort.`;
   window.firstHotspot = (d.hotspots && d.hotspots[0]) ? d.hotspots[0].route + '|' + d.hotspots[0].type : null;
   table('hotspots', d.hotspots, [
     { key: 'route', label: 'Line', fn: r => esc(r.route) + (+r.observations < 1000 ? '<span class="tag">few data</span>' : '') },
@@ -506,7 +563,7 @@ function render(d) {
   const w = d.weather_conditions && d.weather_conditions.length ? d.weather_conditions : (d.weather_effect || []);
   document.getElementById('h-weather').textContent = w.length < 2
     ? 'Only one weather condition so far, so there is nothing to compare yet.'
-    : 'Weather in that hour: snow, fog, rain, strong wind or dry. Rain mostly falls on busy days, so the rain table beside this one gives the fair comparison.';
+    : 'Weather in that hour; the fair comparison is in the rain and snow table.';
   table('weather', w, [{ key: 'weather', label: 'Weather' }, obs,
     { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true }], 'avg_delay_min');
   table('light', d.light, [{ key: 'light', label: 'Light' }, obs, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true }], 'avg_gain_s');
@@ -573,10 +630,11 @@ function render(d) {
      { key: 'p1', label: 'Previous trip under 2 min late', num: true, fn: cell('p1') }, { key: 'p2', label: '2–5 min', num: true, fn: cell('p2') },
      { key: 'p3', label: '5–10 min', num: true, fn: cell('p3') }, { key: 'p4', label: 'over 10 min', num: true, fn: cell('p4') }], null,
     'Needs vehicle positions and the v8 processing.');
-  table('rainType', d.rain_by_type, [{ key: 'type', label: 'Type' }, { key: 'rain_observations', label: 'Rainy arrivals', num: true },
-    { key: 'dry_min', label: 'Dry, same hours (min)', num: true }, { key: 'rain_min', label: 'Rain (min)', num: true },
-    { key: 'extra_min', label: 'Extra in rain (min)', num: true, fn: r => (+r.extra_min > 0 ? '+' : '') + esc(fmt(r.extra_min)) }], 'extra_min',
-    'Not enough rainy hours with dry hours to compare yet.');
+  const sgn = v => v == null || v === '' ? '–' : (+v > 0 ? '+' : '') + esc(fmt(v));
+  table('rainType', d.rain_by_type, [{ key: 'type', label: 'Type', fn: r => esc(r.type === 'rail' ? 'HÉV' : r.type) },
+    { key: 'rain_observations', label: 'Rainy arrivals', num: true }, { key: 'rain_extra_min', label: 'Extra in rain (min)', num: true, fn: r => sgn(r.rain_extra_min) },
+    { key: 'snow_observations', label: 'Snowy arrivals', num: true }, { key: 'snow_extra_min', label: 'Extra in snow (min)', num: true, fn: r => sgn(r.snow_extra_min) }],
+    'rain_extra_min', 'Not enough rainy or snowy hours with dry hours to compare yet.');
   const strip = v => esc(String(v).replace(/^\d: /, ''));
   table('temperature', d.temperature, [{ key: 'temperature', label: 'Temperature', fn: r => strip(r.temperature) }, obs,
     { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true }], 'avg_delay_min');
@@ -658,8 +716,8 @@ function showLine(key, dir) {
 }
 document.getElementById('lineSelect').addEventListener('change', e => showLine(e.target.value));
 
-const BINS = [[-Infinity, 0, '#2e7d32', 'makes up time'], [0, 15, '#9ccc65', '0–15 s'], [15, 40, '#fbc02d', '15–40 s'],
-              [40, 90, '#ef6c00', '40–90 s'], [90, Infinity, '#b71c1c', 'over 90 s']];
+const BINS = [[-Infinity, 0, '#2e7d32', 'makes up time'], [0, 30, '#9ccc65', '0–30 s'], [30, 60, '#fbc02d', '30–60 s'],
+              [60, 120, '#ef6c00', '1–2 min'], [120, Infinity, '#b71c1c', 'over 2 min']];
 const colour = g => BINS.find(b => g >= b[0] && g < b[1])[2];
 function loadMap() {
   if (mapView === currentView) return;
@@ -681,16 +739,22 @@ function loadMap() {
     // forbid storing traffic data). Only offered when deploy.sh tomtom has put a key in tomtom.json.
     fetch('tomtom.json?' + Date.now()).then(r => r.ok ? r.json() : null).then(cfg => {
       if (!cfg || !cfg.key) return;
-      mapObj.createPane('traffic').style.zIndex = 350;
+      // above our stretches (overlay pane, z 400): both run along the same streets, so below them it was hidden
+      mapObj.createPane('traffic').style.zIndex = 450;
       const traffic = L.tileLayer('https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=' + encodeURIComponent(cfg.key),
-        { pane: 'traffic', opacity: 0.8, maxZoom: 19, attribution: 'Live traffic &copy; TomTom' });
+        { pane: 'traffic', opacity: 0.95, maxZoom: 19, attribution: 'Live traffic &copy; TomTom' });
+      let btn = null, ok = 0, bad = 0;
+      traffic.on('tileload', () => { ok++; if (btn && btn.classList.contains('tt-err')) { btn.classList.remove('tt-err'); btn.textContent = 'Live road traffic (TomTom)'; } });
+      traffic.on('tileerror', () => { bad++; if (btn && !ok && bad >= 4) { btn.classList.add('tt-err'); btn.textContent = 'TomTom does not answer: check the key'; } });
       const ctl = L.control({ position: 'topright' });
-      ctl.onAdd = () => { const b = L.DomUtil.create('button', 'tt-btn'); b.type = 'button'; b.setAttribute('aria-pressed', 'false');
+      ctl.onAdd = () => { const b = btn = L.DomUtil.create('button', 'tt-btn'); b.type = 'button'; b.setAttribute('aria-pressed', 'false');
         b.textContent = 'Live road traffic (TomTom)';
-        b.title = 'Car traffic right now, from TomTom: green flows freely, red is slow. Not stored.';
+        b.title = 'Car traffic right now, from TomTom: green flows freely, red is slow. Our stretches fade while it is on. Not stored.';
         L.DomEvent.disableClickPropagation(b);
         b.addEventListener('click', () => { const on = !mapObj.hasLayer(traffic);
-          if (on) traffic.addTo(mapObj); else traffic.remove(); b.setAttribute('aria-pressed', String(on)); });
+          if (on) traffic.addTo(mapObj); else traffic.remove();
+          mapObj.getPane('overlayPane').style.opacity = on ? '0.25' : '1';
+          b.setAttribute('aria-pressed', String(on)); });
         return b; };
       ctl.addTo(mapObj);
     }).catch(() => {});
