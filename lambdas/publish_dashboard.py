@@ -388,6 +388,8 @@ def build_queries(WINDOW):
 
 # Trips that are 30+ minutes late at EVERY stop on two or more days are data errors (a vehicle matched
 # to the wrong trip, night after night), not delays. A real incident happens once; these come back.
+# A trip-day with a BKK traffic or accident notice is a real incident, not a data error (same rule as the
+# shifted-trip exemption in the Glue job since v8), so it never counts towards the "two bad days".
 SUSPECT_SQL = f"""
     WITH t AS (SELECT route_short_name AS r, trip_id, dt, min(arrival_delay_s) AS mn,
                       max(CASE WHEN alert_category IN ('traffic', 'accident') THEN 1 ELSE 0 END) AS real_disruption
