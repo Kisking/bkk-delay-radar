@@ -423,7 +423,7 @@ const ABOUT = {
       const bad = k.filter(r => r.status === false).map(r => r.kpi);
       return `${k.length - bad.length} of ${k.length} KPIs are met` + (bad.length ? `; not met: ${bad.join(', ')}.` : '.'); },
     conclude: 'Whether the numbers on this page can be trusted today.',
-    caveat: 'Processing time and cost come from the Glue run history and list prices; they leave out storage and the small Lambda costs.' },
+    caveat: 'The line count leaves out timetable entries that are not separate lines (❄-marked special runs of existing lines, service codes); they are listed under the table. Processing time and cost come from the Glue run history and list prices; they leave out storage and the small Lambda costs.' },
   daily: {
     shows: 'One row per day: how much of the feed was collected and how the processing job went.',
     read: 'Healthy days have about 24 hours of data, “Not matched” near 0 %, “Left out as errors” a few percent and no warnings.',
@@ -533,8 +533,10 @@ function render(d) {
   table('kpiNet', (d.kpis || []).filter(r => r.group === 'network'), kcols, null, 'KPIs appear after the next dashboard refresh.');
   table('kpiOps', (d.kpis || []).filter(r => r.group !== 'network'), kcols, null, 'KPIs appear after the next dashboard refresh.');
   const lm = d.kpi_lines_missing || [];
-  document.getElementById('kpiMissing').textContent = lm.length
-    ? `Timetable lines with fewer than 1,000 arrivals in this view (${lm.length}): ${lm.slice(0, 60).join(', ')}${lm.length > 60 ? ' …' : ''}. Usually lines with very few trips, such as replacement or school lines.` : '';
+  const nc = d.kpi_lines_not_counted || [];
+  document.getElementById('kpiMissing').textContent = (lm.length
+    ? `Timetable lines with fewer than 1,000 arrivals in this view (${lm.length}): ${lm.slice(0, 60).join(', ')}${lm.length > 60 ? ' …' : ''}. Usually lines with very few trips, such as school or night lines. ` : '') +
+    (nc.length ? `Not counted as separate lines (${nc.length}): ${nc.join(', ')}; these are ❄-marked special runs of existing lines and service codes, not passenger lines.` : '');
   table('zones', d.by_zone, [{ key: 'zone', label: 'Zone', fn: r => ({ inner: 'city centre (under 3 km)', middle: 'middle ring (3–8 km)', outer: 'outskirts (over 8 km)' })[r.zone] || esc(r.zone) }, obs,
     { key: 'avg_delay_min', label: 'Average delay (min)', num: true }, { key: 'avg_gain_s', label: 'Added between stops (s)', num: true },
     { key: 'on_time_pct', label: 'On time (%)', num: true }], 'avg_delay_min');

@@ -604,22 +604,29 @@ def measured_type(t):
     return t in (0, 2, 3, 11) or 100 <= t < 200 or 700 <= t < 800 or t in (800, 900)
 
 
+def not_a_line(name):
+    """Route entries in BKK's timetable that are not separate lines: the ❄-marked variants of existing lines
+    (special festive runs) and service codes made of letters only, such as KTVB or MOZG (not passenger lines)."""
+    return "❄" in name or bool(re.fullmatch(r"[A-Z]{2,}[0-9]*", name))
+
+
 def timetable_lines():
-    """Line names in the latest stored timetable (routes.txt), measured kinds only."""
+    """(line names, left-out entries) from the latest stored timetable (routes.txt), measured kinds only."""
     days = []
     for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix="raw/gtfs_static_txt/", Delimiter="/"):
         days += [c["Prefix"] for c in page.get("CommonPrefixes", [])]
     if not days:
-        return set()
+        return set(), []
     body = s3.get_object(Bucket=BUCKET, Key=max(days) + "routes.txt")["Body"].read().decode("utf-8-sig")
-    out = set()
+    out, skipped = set(), set()
     for r in csv.DictReader(io.StringIO(body)):
         try:
-            if measured_type(int(r.get("route_type") or -1)) and r.get("route_short_name"):
-                out.add(r["route_short_name"].strip())
+            name = (r.get("route_short_name") or "").strip()
+            if measured_type(int(r.get("route_type") or -1)) and name:
+                (skipped if not_a_line(name) else out).add(name)
         except ValueError:
             pass
-    return out
+    return out, sorted(skipped)
 
 
 def build_kpis(out, runs, athena_bytes_per_day, tt_lines=frozenset()):
@@ -780,13 +787,14 @@ def handler(event, context):
         for o in outs.values():
             o["summary"]["failed_panels"].append(f"kpis: Glue run history: {str(e)[:120]}")
     try:
-        tt = timetable_lines()
+        tt, tt_skipped = timetable_lines()
     except Exception as e:
-        tt = set()
+        tt, tt_skipped = set(), []
         for o in outs.values():
             o["summary"]["failed_panels"].append(f"kpis: timetable lines: {str(e)[:120]}")
     for key, out in outs.items():
         out["kpis"] = build_kpis(out, runs, scanned_total, tt)
+        out["kpi_lines_not_counted"] = tt_skipped
         s3.put_object(Bucket=SITE, Key=key, Body=json.dumps(out),
                       ContentType="application/json", CacheControl="no-cache")
         result[key] = {"days": out["summary"]["days"], "mb_scanned": out["summary"]["mb_scanned"],
