@@ -46,7 +46,7 @@ HAS_DELAY = "arrival_delay_s IS NOT NULL AND stop_sequence > 1 AND coalesce(reli
 ON_TIME = "CASE WHEN arrival_delay_s BETWEEN -60 AND 180 THEN 1 ELSE 0 END"   # at most 1 min early, 3 min late
 # Until a vehicle leaves its first stop, the feed predicts the timetable there, so stop 1 always
 # looks on time and the real late departure shows up as a jump at stop 2. Therefore:
-REL = "coalesce(reliable, true)"   # v5 quality rules: stale predictions and shifted trips are left out
+REL = "(coalesce(reliable, true) AND coalesce(arrival_delay_s, 0) >= -600)"   # v5 rules + nothing 10+ min early
 NOT_FIRST = f"stop_sequence > 1 AND {REL}"                                    # averages skip stop 1
 INC = ("delay_increment_s IS NOT NULL AND abs(delay_increment_s) < 1800 "     # drop broken pairs
        "AND stop_sequence > 2 AND coalesce(reliable, true)")                  # and the 1 -> 2 segment
@@ -252,11 +252,11 @@ def build_queries(WINDOW):
           GROUP BY 1, 2 ORDER BY 1, 2""",
       "kpi_lines": f"""
           SELECT route_short_name, count(*) AS observations FROM delays
-          WHERE {WINDOW} AND {HAS_DELAY} GROUP BY 1""",
+          WHERE {SINCE_START} AND {HAS_DELAY} GROUP BY 1""",
       "kpi_stretches": f"""
           SELECT count(*) AS stretches, count_if(n >= 100) AS reliable FROM (
             SELECT prev_stop_id, stop_id, count(*) AS n FROM delays
-            WHERE {WINDOW} AND {INC} AND {EN_ROUTE} AND prev_stop_id IS NOT NULL GROUP BY 1, 2)""",
+            WHERE {SINCE_START} AND {INC} AND {EN_ROUTE} AND prev_stop_id IS NOT NULL GROUP BY 1, 2)""",
       "districts": f"""
           SELECT d.district_num, d.district,
                  count(*) FILTER (WHERE {HAS_DELAY}) AS observations,
@@ -354,7 +354,7 @@ def build_queries(WINDOW):
                  count(DISTINCT service_date) AS days, count(*) AS observations,
                  round(avg(arrival_delay_s) / 60.0, 2) AS avg_delay_min, round(100.0 * avg({ON_TIME}), 1) AS on_time_pct
           FROM delays WHERE {SINCE_START} AND {HAS_DELAY} AND day_type IS NOT NULL
-          GROUP BY 1, 2 ORDER BY 2, 1""",
+          GROUP BY 1, 2 HAVING count(*) >= 20000 ORDER BY 2, 1""",
       "cemetery_lines": f"""
           WITH c AS (SELECT DISTINCT route_short_name FROM delays
                      WHERE {SINCE_START} AND (lower(stop_name) LIKE '%temető%' OR lower(stop_name) LIKE '%sírkert%'))
@@ -607,6 +607,8 @@ def measured_type(t):
 def not_a_line(name):
     """Route entries in BKK's timetable that are not separate lines: the ❄-marked variants of existing lines
     (special festive runs) and service codes made of letters only, such as KTVB or MOZG (not passenger lines)."""
+    # any symbol in the name (BKK marks the special runs with a snowflake, and there are several snowflake
+    # characters in Unicode), or a code made of letters only
     return bool(re.search(r"[^0-9A-Za-z\- ]", name)) or bool(re.fullmatch(r"[A-Z]{2,}[0-9]*", name))
 
 
@@ -651,19 +653,19 @@ def build_kpis(out, runs, athena_bytes_per_day, tt_lines=frozenset()):
     if tt_lines:
         good = sorted(l for l in tt_lines if seen.get(l, 0) >= 1000)
         pct = 100.0 * len(good) / len(tt_lines)
-        add("network", "Timetable lines with reliable data (1,000+ arrivals)", "≥ 90 % of lines",
+        add("network", "Timetable lines with reliable data (1,000+ arrivals, whole period)", "≥ 90 % of lines",
             f"{len(good)} of {len(tt_lines)} lines ({pct:.0f} %)", None, pct >= 90)
         out["kpi_lines_missing"] = sorted(l for l in tt_lines if seen.get(l, 0) < 1000)
     else:
-        add("network", "Timetable lines with reliable data (1,000+ arrivals)", "≥ 90 % of lines", None, None, None)
+        add("network", "Timetable lines with reliable data (1,000+ arrivals, whole period)", "≥ 90 % of lines", None, None, None)
     st = (out.pop("kpi_stretches", []) or [{}])[0]
     total, good = num(st.get("stretches")), num(st.get("reliable"))
     if total:
         pct = 100.0 * good / total
-        add("network", "Stretches with reliable data (100+ arrivals)", "≥ 80 % of stretches",
+        add("network", "Stretches with reliable data (100+ arrivals, whole period)", "≥ 80 % of stretches",
             f"{good:,.0f} of {total:,.0f} stretches ({pct:.0f} %)", None, pct >= 80)
     else:
-        add("network", "Stretches with reliable data (100+ arrivals)", "≥ 80 % of stretches", None, None, None)
+        add("network", "Stretches with reliable data (100+ arrivals, whole period)", "≥ 80 % of stretches", None, None, None)
     daily("network", "Records matched to the timetable", "≥ 98 %",
           [(r["dt"], None if num(r.get("unmatched_bkk_trip_pct")) is None else round(100 - num(r["unmatched_bkk_trip_pct"]), 2)) for r in pipe],
           lambda v: v >= 98, " %")
@@ -673,6 +675,11 @@ def build_kpis(out, runs, athena_bytes_per_day, tt_lines=frozenset()):
 
     # --- does the pipeline run well?
     full = [r for r in cov if r.get("dt") != START]          # the first day started at noon
+    if full:                                                  # a day with no data at all is 0 hours, not missing
+        have = {r["dt"]: r for r in full}
+        d0, d1 = dt.date.fromisoformat(full[0]["dt"]), dt.date.fromisoformat(full[-1]["dt"])
+        full = [have.get(x, {"dt": x, "hours_collected": 0}) for x in
+                ((d0 + dt.timedelta(days=i)).isoformat() for i in range((d1 - d0).days + 1))]
     daily("pipeline", "Feed hours captured a day", "≥ 20 h", [(r["dt"], num(r.get("hours_collected"))) for r in full],
           lambda v: v >= 20, " h")
     daily("pipeline", "Rows left out as data errors", "≤ 5 % a day",
