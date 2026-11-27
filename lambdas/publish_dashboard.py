@@ -607,7 +607,7 @@ def measured_type(t):
 def not_a_line(name):
     """Route entries in BKK's timetable that are not separate lines: the ❄-marked variants of existing lines
     (special festive runs) and service codes made of letters only, such as KTVB or MOZG (not passenger lines)."""
-    return "❄" in name or bool(re.fullmatch(r"[A-Z]{2,}[0-9]*", name))
+    return bool(re.search(r"[^0-9A-Za-z\- ]", name)) or bool(re.fullmatch(r"[A-Z]{2,}[0-9]*", name))
 
 
 def timetable_lines():
